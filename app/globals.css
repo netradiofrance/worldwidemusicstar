@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #0A0A0A;
+  color: #F5F5F5;
+}
+
+body {
+  font-feature-settings: 'cv02','cv03','cv04','cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle ambient glow used on the hero */
+.bg-ambient-red {
+  background:
+    radial-gradient(900px circle at 12% 8%, rgba(214,40,40,0.18), transparent 55%),
+    radial-gradient(700px circle at 88% 78%, rgba(214,40,40,0.10), transparent 60%),
+    radial-gradient(500px circle at 50% 100%, rgba(214,40,40,0.08), transparent 60%);
+}
+
+/* Billboard-inspired chart row hover */
+.chart-row {
+  transition: background-color .15s ease;
+}
+.chart-row:hover {
+  background-color: rgba(255,255,255,0.04);
+}
+
+/* Crisp red focus ring on inputs */
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid #D62828;
+  outline-offset: 2px;
+}
+
+/* Scrollbar restraint */
+::-webkit-scrollbar { width: 10px; height: 10px }
+::-webkit-scrollbar-track { background: #0A0A0A }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 8px }
+::-webkit-scrollbar-thumb:hover { background: #3A3A3A }
+
+/* Article markdown styling */
+.prose-wwms h2 {
+  font-family: 'Anton', Impact, sans-serif;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+  margin: 2rem 0 1rem;
+  text-transform: uppercase;
+  color: #F5F5F5;
+}
+.prose-wwms h3 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 1.5rem 0 0.75rem;
+  color: #F5F5F5;
+}
+.prose-wwms p {
+  font-size: 17px;
+  line-height: 1.75;
+  color: #C9C9C9;
+  margin-bottom: 1.25rem;
+}
+.prose-wwms a {
+  color: #D62828;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-wwms ul, .prose-wwms ol {
+  margin: 0 0 1.25rem 1.25rem;
+  color: #C9C9C9;
+  font-size: 17px;
+  line-height: 1.75;
+}
+.prose-wwms strong {
+  color: #F5F5F5;
+}
