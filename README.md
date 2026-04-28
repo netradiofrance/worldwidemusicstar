@@ -180,3 +180,5 @@ On the 1st of each month at 00:05 UTC, the `monthly-archive` cron freezes the pr
 - **The IMA / VAST tag** is currently the one used on tackendo.com. For production volume on this site, request a dedicated ad unit from your ad operator and replace `NEXT_PUBLIC_VAST_TAG_URL`.
 - **Rate-limiting & advanced anti-fraud** (Cloudflare Turnstile, per-/24 throttling, etc.) are not in this MVP — add them on top of `/api/votes/cast` once traffic justifies it.
 - The **score recomputation** on counter refresh assumes `score` lives on the row; if the formula changes, the next cron will rewrite all scores correctly.
+
+
