@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/supabase';
 import { GENRE_BY_SLUG } from '@/lib/genres';
 import { CoverImage } from '@/components/charts/CoverImage';
 import { formatNumber } from '@/lib/scoring';
-import type { ArchivedRanking } from '@/lib/database.types';
+import type { ArchivedRanking, ChartArchive } from '@/lib/database.types';
 
 export const revalidate = 3600;
 
@@ -20,21 +20,36 @@ export default async function ArchivePage({ params }: PageProps) {
   const year = Number(m[1]);
   const month = Number(m[2]);
 
+  // Build the query in two steps so TypeScript can infer the row type
+  // correctly. Mixing `.is()` and `.eq()` in a ternary returns a union
+  // that the type-checker collapses to `never`, which is the bug we hit.
   const sb = createServerClient();
-  const baseQuery = sb
-    .from('chart_archives')
-    .select('*')
-    .eq('period_year', year)
-    .eq('period_month', month);
-  const { data } = await (scope === 'all'
-    ? baseQuery.is('genre', null)
-    : baseQuery.eq('genre', scope as any)
-  ).maybeSingle();
+  let archive: ChartArchive | null = null;
 
-  if (!data) notFound();
+  if (scope === 'all') {
+    const { data } = await sb
+      .from('chart_archives')
+      .select('*')
+      .eq('period_year', year)
+      .eq('period_month', month)
+      .is('genre', null)
+      .maybeSingle();
+    archive = (data as ChartArchive | null) ?? null;
+  } else {
+    const { data } = await sb
+      .from('chart_archives')
+      .select('*')
+      .eq('period_year', year)
+      .eq('period_month', month)
+      .eq('genre', scope as any)
+      .maybeSingle();
+    archive = (data as ChartArchive | null) ?? null;
+  }
+
+  if (!archive) notFound();
 
   const label = scope === 'all' ? 'All Charts' : (GENRE_BY_SLUG[scope]?.name ?? scope);
-  const ranking = (data.ranking ?? []) as ArchivedRanking[];
+  const ranking: ArchivedRanking[] = Array.isArray(archive.ranking) ? archive.ranking : [];
 
   return (
     <article>
