@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/refresh-counters",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/generate-articles",
-      "schedule": "0 6,12,18,22 * * *"
+      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/monthly-archive",
