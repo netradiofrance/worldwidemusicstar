@@ -57,12 +57,11 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* Hero #1 card */}
+            {/* Hero #1 card — div instead of Link, so the VoteButton (Client
+                Component) can have its own click handler without conflicting
+                with an outer Link. The track name is itself a link. */}
             {overallNumberOne ? (
-              <Link
-                href={`/track/${overallNumberOne.id}`}
-                className="group block rounded-2xl border border-white/10 bg-ink-900/70 backdrop-blur p-6 sm:p-8 hover:border-brand/50 transition-colors"
-              >
+              <div className="rounded-2xl border border-white/10 bg-ink-900/70 backdrop-blur p-6 sm:p-8 hover:border-brand/50 transition-colors">
                 <div className="flex items-center justify-between mb-6">
                   <div className="text-[11px] font-bold uppercase tracking-widest text-brand">
                     #1 · All Charts
@@ -76,9 +75,12 @@ export default async function HomePage() {
                     size={140}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="font-display text-3xl sm:text-4xl uppercase tracking-tightest leading-none mb-2 truncate group-hover:text-brand transition-colors">
+                    <Link
+                      href={`/track/${overallNumberOne.id}`}
+                      className="block font-display text-3xl sm:text-4xl uppercase tracking-tightest leading-none mb-2 truncate hover:text-brand transition-colors"
+                    >
                       {overallNumberOne.song_title}
-                    </div>
+                    </Link>
                     <div className="text-ink-200 text-lg mb-4 truncate">{overallNumberOne.artist_name}</div>
                     <div className="text-[11px] uppercase tracking-widest text-ink-400">
                       {GENRE_BY_SLUG[overallNumberOne.genre]?.name ?? overallNumberOne.genre}
@@ -99,10 +101,16 @@ export default async function HomePage() {
                     <div className="text-[10px] text-ink-400 uppercase tracking-wider">YouTube</div>
                   </div>
                 </div>
-                <div className="mt-5 flex justify-end" onClick={e => e.preventDefault()}>
+                <div className="mt-5 flex justify-between items-center">
+                  <Link
+                    href={`/track/${overallNumberOne.id}`}
+                    className="text-sm text-ink-300 hover:text-white inline-flex items-center gap-1"
+                  >
+                    View page <ArrowUpRight size={14} />
+                  </Link>
                   <VoteButton trackId={overallNumberOne.id} />
                 </div>
-              </Link>
+              </div>
             ) : (
               <div className="rounded-2xl border border-white/10 bg-ink-900/70 p-8 text-center">
                 <Sparkles className="mx-auto text-brand mb-4" size={28} />
