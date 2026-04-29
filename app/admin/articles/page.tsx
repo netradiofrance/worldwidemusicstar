@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase';
-import Link from 'next/link';
 import { ArticleListActions } from '@/components/admin/ArticleListActions';
+import { GenerateArticleButton } from '@/components/admin/GenerateArticleButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +19,7 @@ export default async function AdminArticlesPage() {
           <h1 className="font-display uppercase text-4xl tracking-tightest mb-1">Articles</h1>
           <p className="text-ink-300">Review AI-generated drafts, edit, publish.</p>
         </div>
-        <form action="/api/blog/generate" method="POST">
-          <button className="rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-5 py-2.5 text-sm" type="submit">
-            + Generate new draft
-          </button>
-        </form>
+        <GenerateArticleButton />
       </div>
 
       <div className="rounded-xl bg-ink-900 border border-white/5 overflow-hidden">
