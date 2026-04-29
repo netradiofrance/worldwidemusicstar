@@ -12,6 +12,11 @@ const Body = z.object({
   adSessionId: z.string().min(8),
 });
 
+// Rate limit window — change this single value to relax/tighten.
+// 1 hour gives serious fans the ability to keep boosting their artist
+// without letting bots flood the chart.
+const VOTE_WINDOW_MS = 60 * 60 * 1000;
+
 export async function POST(req: Request) {
   let payload: z.infer<typeof Body>;
   try {
@@ -28,7 +33,36 @@ export async function POST(req: Request) {
 
   const sb = createServerClient();
 
-  // Insert vote — unique constraint will catch repeats
+  // 1. Rate limit check — has this voter voted for this track in the
+  //    last hour?
+  const since = new Date(Date.now() - VOTE_WINDOW_MS).toISOString();
+  const { data: recent, error: recentErr } = await sb
+    .from('votes')
+    .select('created_at')
+    .eq('track_id', trackId)
+    .eq('voter_hash', voterHash)
+    .gt('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (recentErr) {
+    console.error('[votes/cast] rate-limit query error:', recentErr);
+    return NextResponse.json({ error: 'Could not register vote' }, { status: 500 });
+  }
+  if (recent && recent.length > 0) {
+    const lastAt = new Date(recent[0].created_at).getTime();
+    const waitMs = Math.max(0, VOTE_WINDOW_MS - (Date.now() - lastAt));
+    const waitMin = Math.ceil(waitMs / 60_000);
+    return NextResponse.json(
+      {
+        error: `You can vote again for this track in ${waitMin} minute${waitMin > 1 ? 's' : ''}.`,
+        retryAfterMinutes: waitMin,
+      },
+      { status: 429 },
+    );
+  }
+
+  // 2. Insert the vote
   const { error: insertErr } = await sb.from('votes').insert({
     track_id: trackId,
     voter_hash: voterHash,
@@ -39,19 +73,11 @@ export async function POST(req: Request) {
   });
 
   if (insertErr) {
-    // 23505 = unique_violation in Postgres
-    if ((insertErr as any).code === '23505') {
-      return NextResponse.json(
-        { error: 'You have already voted for this track today.' },
-        { status: 409 },
-      );
-    }
     console.error('[votes/cast] insert error:', insertErr);
     return NextResponse.json({ error: 'Could not register vote' }, { status: 500 });
   }
 
-  // Bump the cached counter & score on the track. We re-read to get
-  // a consistent view rather than relying on an atomic increment.
+  // 3. Bump the cached counter & score on the track
   const { data: t, error: readErr } = await sb
     .from('tracks')
     .select('votes_count, spotify_followers, youtube_subscribers')
