@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { authorizeCron } from '@/lib/cron-auth';
 import { createServerClient } from '@/lib/supabase';
-import { getVideoInfo, getChannelSubscribers } from '@/lib/youtube';
+import {
+  getChannelSubscribers,
+  resolveAnyYoutubeUrlToChannelId,
+} from '@/lib/youtube';
 import { computeScore } from '@/lib/scoring';
 
 export const runtime = 'nodejs';
@@ -21,29 +24,46 @@ async function runRefresh() {
   const sb = createServerClient();
   const { data: tracks, error } = await sb
     .from('tracks')
-    .select('id, youtube_video_id, youtube_channel_id, votes_count, spotify_followers, youtube_subscribers')
+    .select('id, youtube_url, youtube_video_id, youtube_channel_id, votes_count, spotify_followers, youtube_subscribers')
     .eq('status', 'active');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  let updated = 0, skipped = 0;
+  let updated = 0, skipped = 0, resolved = 0;
   // Cache channel subscriber lookups per-run to save quota
   const channelCache = new Map<string, number>();
 
   for (const t of tracks ?? []) {
-    if (!t.youtube_video_id) { skipped++; continue; }
+    if (!t.youtube_url) { skipped++; continue; }
+
     try {
+      // 1. Find or resolve a channel id for this track
       let channelId = t.youtube_channel_id;
+      let videoId = t.youtube_video_id;
+
       if (!channelId) {
-        const info = await getVideoInfo(t.youtube_video_id);
-        if (!info) { skipped++; continue; }
-        channelId = info.channelId;
-        await sb.from('tracks').update({ youtube_channel_id: channelId }).eq('id', t.id);
+        const resolvedRes = await resolveAnyYoutubeUrlToChannelId(t.youtube_url);
+        channelId = resolvedRes.channelId;
+        if (!videoId && resolvedRes.videoId) videoId = resolvedRes.videoId;
+
+        if (channelId) {
+          // Persist the resolved ids so future runs skip the resolution step
+          await sb.from('tracks').update({
+            youtube_channel_id: channelId,
+            youtube_video_id: videoId,
+          }).eq('id', t.id);
+          resolved++;
+        }
       }
+
+      if (!channelId) { skipped++; continue; }
+
+      // 2. Get subscriber count (cached per run)
       const subs = channelCache.has(channelId)
         ? channelCache.get(channelId)!
         : await getChannelSubscribers(channelId);
       channelCache.set(channelId, subs);
 
+      // 3. Recompute the score and persist
       const score = computeScore({
         votes_count: t.votes_count ?? 0,
         spotify_followers: t.spotify_followers ?? 0,
@@ -61,5 +81,11 @@ async function runRefresh() {
     }
   }
 
-  return NextResponse.json({ ok: true, updated, skipped, total: tracks?.length ?? 0 });
+  return NextResponse.json({
+    ok: true,
+    updated,
+    skipped,
+    resolved,
+    total: tracks?.length ?? 0,
+  });
 }
