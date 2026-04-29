@@ -19,16 +19,21 @@ const PRICE_USD = Number(process.env.NEXT_PUBLIC_ENTRY_PRICE_USD ?? '99.99');
 
 export function AddSongForm() {
   const [email, setEmail] = useState('');
+  // Manual artist/song fields — always present, pre-filled if Spotify match selected.
+  const [artistName, setArtistName] = useState('');
+  const [songTitle, setSongTitle] = useState('');
+  // Spotify search/autocomplete (optional)
   const [search, setSearch] = useState('');
   const [hits, setHits] = useState<SpotifySearchHit[]>([]);
   const [chosen, setChosen] = useState<SpotifySearchHit | null>(null);
   const [searching, setSearching] = useState(false);
+  // Optional YouTube URL
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [genre, setGenre] = useState<GenreSlug | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // debounced search
+  // Debounced Spotify search
   useEffect(() => {
     if (chosen) return;
     if (search.trim().length < 2) { setHits([]); return; }
@@ -52,18 +57,23 @@ export function AddSongForm() {
     setChosen(h);
     setHits([]);
     setSearch(`${h.artist_name} — ${h.name}`);
+    // Pre-fill the manual fields with Spotify data
+    setArtistName(h.artist_name);
+    setSongTitle(h.name);
   }
 
   function clearChoice() {
     setChosen(null);
     setSearch('');
+    // Don't clear artist/song — user might want to keep what was filled
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!email || !genre || !youtubeUrl) {
-      setError('Please complete every field.');
+    // Required: email, artist, title, genre. YouTube is optional.
+    if (!email || !genre || !artistName.trim() || !songTitle.trim()) {
+      setError('Please fill in your email, artist name, song title, and genre.');
       return;
     }
     setSubmitting(true);
@@ -74,13 +84,13 @@ export function AddSongForm() {
         body: JSON.stringify({
           email,
           genre,
-          artistName: chosen?.artist_name ?? '',
-          songTitle: chosen?.name ?? '',
+          artistName: artistName.trim(),
+          songTitle: songTitle.trim(),
           spotifyTrackId: chosen?.id ?? null,
           spotifyUrl: chosen?.external_url ?? null,
           coverUrl: chosen?.album_cover_url ?? null,
           spotifyArtistId: chosen?.artist_id ?? null,
-          youtubeUrl,
+          youtubeUrl: youtubeUrl.trim() || null,
         }),
       });
       const data = await res.json();
@@ -113,9 +123,11 @@ export function AddSongForm() {
         <p className="text-xs text-ink-400 mt-2">Used for confirmation and chart updates. Never shared.</p>
       </div>
 
-      {/* Spotify search */}
+      {/* Spotify search — OPTIONAL */}
       <div>
-        <label className="block text-sm font-semibold mb-2">Find your song on Spotify</label>
+        <label className="block text-sm font-semibold mb-2">
+          Find your song on Spotify <span className="text-ink-400 font-normal">(optional)</span>
+        </label>
         <div className="relative">
           <input
             type="text"
@@ -172,22 +184,51 @@ export function AddSongForm() {
           </div>
         )}
         <p className="text-xs text-ink-400 mt-2">
-          The cover art and Spotify link are imported automatically. If your track is not on Spotify yet, you can still submit — leave this empty.
+          If found, the cover art and Spotify link are imported automatically. You can also enter the artist and song name manually below.
         </p>
       </div>
 
-      {/* YouTube URL */}
+      {/* Artist name (always required, pre-filled if Spotify match) */}
       <div>
-        <label className="block text-sm font-semibold mb-2">YouTube video URL</label>
+        <label className="block text-sm font-semibold mb-2">Artist name</label>
+        <input
+          type="text"
+          value={artistName}
+          onChange={e => setArtistName(e.target.value)}
+          required
+          placeholder="e.g., Mira Solune"
+          className="w-full rounded-lg bg-ink-700 border border-white/10 px-4 py-3 text-white placeholder-ink-400 focus:border-brand"
+        />
+      </div>
+
+      {/* Song title (always required, pre-filled if Spotify match) */}
+      <div>
+        <label className="block text-sm font-semibold mb-2">Song title</label>
+        <input
+          type="text"
+          value={songTitle}
+          onChange={e => setSongTitle(e.target.value)}
+          required
+          placeholder="e.g., Heartbeat Highway"
+          className="w-full rounded-lg bg-ink-700 border border-white/10 px-4 py-3 text-white placeholder-ink-400 focus:border-brand"
+        />
+      </div>
+
+      {/* YouTube URL — OPTIONAL */}
+      <div>
+        <label className="block text-sm font-semibold mb-2">
+          YouTube video URL <span className="text-ink-400 font-normal">(optional)</span>
+        </label>
         <input
           type="url"
           value={youtubeUrl}
           onChange={e => setYoutubeUrl(e.target.value)}
-          required
           placeholder="https://www.youtube.com/watch?v=…"
           className="w-full rounded-lg bg-ink-700 border border-white/10 px-4 py-3 text-white placeholder-ink-400 focus:border-brand"
         />
-        <p className="text-xs text-ink-400 mt-2">Your YouTube subscribers count is fetched from the video&apos;s channel.</p>
+        <p className="text-xs text-ink-400 mt-2">
+          If provided, your YouTube subscribers count is fetched and added to your score. No clip yet? Leave blank — you can add it later.
+        </p>
       </div>
 
       {/* Genre */}
@@ -214,7 +255,7 @@ export function AddSongForm() {
         </div>
         <ul className="text-xs text-ink-300 space-y-1 mt-2">
           <li>• Live ranking on your genre chart</li>
-          <li>• Eligible for the monthly $WorldWide Music Star award</li>
+          <li>• Eligible for the monthly WorldWide Music Star award</li>
           <li>• Auto-tracked Spotify and YouTube counters</li>
         </ul>
       </div>
