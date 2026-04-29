@@ -6,13 +6,18 @@
 
 google.com, pub-2256270252424576, DIRECT, f08c47fec0942fa0
 
-
-
 # ========================
 
 # VOISETECH - INVENTORY SETUP
 
 # ========================
+
+google.com , pub-1682595508078257, REVENDEUR, f08c47fec0942fa0
+inventorypartnerdomain= voisetech.com
+voisetech.com , 1253, DIRECT, 9009ef0379162448
+video.unrulymedia.com , 947386756, REVENDEUR
+pubmatic.com , 166206, DIRECT, 5d62403b186f2ace
+rubiconproject.com , 22884, REVENDEUR, 0bfd66d529a55807
 
 voisetech.com, 1253, DIRECT, 9009ef0379162448
 
