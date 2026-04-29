@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase';
 import { getAdminFromCookie } from '@/lib/admin-auth';
 import { computeScore } from '@/lib/scoring';
+import {
+  extractYouTubeVideoId,
+  extractYouTubeChannelId,
+  extractYouTubeHandle,
+} from '@/lib/youtube';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,9 +32,31 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!session) return new NextResponse('unauthorized', { status: 401 });
   const { id } = await params;
 
-  let body;
+  let body: any;
   try { body = Patch.parse(await req.json()); }
   catch (e: any) { return NextResponse.json({ error: 'Invalid', details: e.errors }, { status: 400 }); }
+
+  // Auto-extract YouTube ids when youtube_url is provided/changed.
+  // We only set the ones we can extract directly here. The cron's
+  // resolveAnyYoutubeUrlToChannelId() handles handle URLs (@xxx) which
+  // need an API call — we don't want to do API calls inside the admin
+  // PATCH for snappy saves.
+  if (body.youtube_url !== undefined) {
+    if (body.youtube_url) {
+      body.youtube_video_id = extractYouTubeVideoId(body.youtube_url);
+      // Direct channel id only; @handle is left to the cron to resolve.
+      const directChannelId = extractYouTubeChannelId(body.youtube_url);
+      if (directChannelId) {
+        body.youtube_channel_id = directChannelId;
+      } else if (extractYouTubeHandle(body.youtube_url)) {
+        // It's a handle URL — clear channel id so the cron resolves it next run
+        body.youtube_channel_id = null;
+      }
+    } else {
+      body.youtube_video_id = null;
+      body.youtube_channel_id = null;
+    }
+  }
 
   const sb = createServerClient();
   // Recompute score if any counter changed
@@ -41,11 +68,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         spotify_followers: body.spotify_followers ?? cur.spotify_followers,
         youtube_subscribers: body.youtube_subscribers ?? cur.youtube_subscribers,
       };
-      (body as any).score = computeScore(newCounters);
+      body.score = computeScore(newCounters);
     }
   }
 
-  const { error } = await sb.from('tracks').update(body as any).eq('id', id);
+  const { error } = await sb.from('tracks').update(body).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
