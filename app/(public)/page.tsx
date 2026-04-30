@@ -13,13 +13,16 @@ import type { GenreSlug } from '@/lib/database.types';
 export const revalidate = 60; // ISR — page rebuilds at most every 60s
 
 export default async function HomePage() {
+  // Pull 6 articles: 1 featured + up to 5 secondary
   const [numberOnes, overallTop, articles] = await Promise.all([
     getNumberOnePerGenre(),
     getOverallTop(10),
-    getPublishedArticles(3),
+    getPublishedArticles(6),
   ]);
 
   const overallNumberOne = overallTop[0] ?? null;
+  const featuredArticle = articles[0] ?? null;
+  const otherArticles = articles.slice(1, 6);
 
   return (
     <>
@@ -42,43 +45,25 @@ export default async function HomePage() {
                 Where independent artists become stars.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/add-a-song"
-                  className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-3 transition-colors"
-                >
+                <Link href="/add-a-song" className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-3 transition-colors">
                   Add a Song <ArrowUpRight size={18} />
                 </Link>
-                <Link
-                  href="/charts/all"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/20 hover:border-white/40 text-white font-semibold px-6 py-3 transition-colors"
-                >
+                <Link href="/charts/all" className="inline-flex items-center gap-2 rounded-full border border-white/20 hover:border-white/40 text-white font-semibold px-6 py-3 transition-colors">
                   View All Charts
                 </Link>
               </div>
             </div>
 
-            {/* Hero #1 card — div instead of Link, so the VoteButton (Client
-                Component) can have its own click handler without conflicting
-                with an outer Link. The track name is itself a link. */}
             {overallNumberOne ? (
               <div className="rounded-2xl border border-white/10 bg-ink-900/70 backdrop-blur p-6 sm:p-8 hover:border-brand/50 transition-colors">
                 <div className="flex items-center justify-between mb-6">
-                  <div className="text-[11px] font-bold uppercase tracking-widest text-brand">
-                    #1 · All Charts
-                  </div>
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-brand">#1 · All Charts</div>
                   <Trophy size={18} className="text-brand" />
                 </div>
                 <div className="flex items-start gap-5">
-                  <CoverImage
-                    src={overallNumberOne.cover_url}
-                    alt={overallNumberOne.artist_name}
-                    size={140}
-                  />
+                  <CoverImage src={overallNumberOne.cover_url} alt={overallNumberOne.artist_name} size={140} />
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/track/${overallNumberOne.id}`}
-                      className="block font-display text-3xl sm:text-4xl uppercase tracking-tightest leading-none mb-2 truncate hover:text-brand transition-colors"
-                    >
+                    <Link href={`/track/${overallNumberOne.id}`} className="block font-display text-3xl sm:text-4xl uppercase tracking-tightest leading-none mb-2 truncate hover:text-brand transition-colors">
                       {overallNumberOne.song_title}
                     </Link>
                     <div className="text-ink-200 text-lg mb-4 truncate">{overallNumberOne.artist_name}</div>
@@ -102,10 +87,7 @@ export default async function HomePage() {
                   </div>
                 </div>
                 <div className="mt-5 flex justify-between items-center">
-                  <Link
-                    href={`/track/${overallNumberOne.id}`}
-                    className="text-sm text-ink-300 hover:text-white inline-flex items-center gap-1"
-                  >
+                  <Link href={`/track/${overallNumberOne.id}`} className="text-sm text-ink-300 hover:text-white inline-flex items-center gap-1">
                     View page <ArrowUpRight size={14} />
                   </Link>
                   <VoteButton trackId={overallNumberOne.id} />
@@ -130,26 +112,16 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-20">
           <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
             <div>
-              <h2 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest mb-2">
-                #1 by genre
-              </h2>
+              <h2 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest mb-2">#1 by genre</h2>
               <p className="text-ink-300">Tap a card to see the full chart.</p>
             </div>
-            <Link
-              href="/charts/all"
-              className="text-sm font-semibold text-brand hover:text-white inline-flex items-center gap-1"
-            >
+            <Link href="/charts/all" className="text-sm font-semibold text-brand hover:text-white inline-flex items-center gap-1">
               See full overall chart <ArrowUpRight size={14} />
             </Link>
           </div>
-
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {PUBLIC_GENRES.map(g => (
-              <GenreNumberOneCard
-                key={g.slug}
-                genre={g}
-                track={(numberOnes as Record<GenreSlug, any>)[g.slug as GenreSlug] ?? null}
-              />
+              <GenreNumberOneCard key={g.slug} genre={g} track={(numberOnes as Record<GenreSlug, any>)[g.slug as GenreSlug] ?? null} />
             ))}
           </div>
         </div>
@@ -160,9 +132,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-20">
           <div className="grid md:grid-cols-2 gap-10 items-center">
             <div className="order-2 md:order-1">
-              <div className="text-[11px] font-bold uppercase tracking-widest text-brand mb-4">
-                Award of the Month
-              </div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-brand mb-4">Award of the Month</div>
               <h2 className="font-display uppercase text-4xl sm:text-6xl tracking-tightest leading-[0.95] mb-5">
                 Win the<br />trophy.
               </h2>
@@ -171,71 +141,67 @@ export default async function HomePage() {
                 takes home the WorldWide Music Star award. Real recognition. Real prize.
                 Real proof.
               </p>
-              <Link
-                href="/add-a-song"
-                className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-3 transition-colors"
-              >
+              <Link href="/add-a-song" className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-3 transition-colors">
                 Enter the Race <ArrowUpRight size={18} />
               </Link>
             </div>
             <div className="order-1 md:order-2 flex justify-center">
-              <Image
-                src="/images/trophy.jpg"
-                alt="WorldWide Music Star Award trophy"
-                width={520}
-                height={520}
-                className="rounded-2xl shadow-[0_30px_80px_rgba(214,40,40,0.3)] max-w-sm w-full"
-                priority
-              />
+              <Image src="/images/trophy.jpg" alt="WorldWide Music Star Award trophy" width={520} height={520} className="rounded-2xl shadow-[0_30px_80px_rgba(214,40,40,0.3)] max-w-sm w-full" priority />
             </div>
           </div>
         </div>
       </section>
 
-      {/* LATEST NEWS */}
-      {articles.length > 0 && (
+      {/* MUSIC BLOG — featured + 5 in a grid */}
+      {featuredArticle && (
         <section className="border-b border-white/5">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-20">
             <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-              <h2 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest">
-                Music blog
-              </h2>
-              <Link
-                href="/blog"
-                className="text-sm font-semibold text-brand hover:text-white inline-flex items-center gap-1"
-              >
+              <h2 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest">Music blog</h2>
+              <Link href="/blog" className="text-sm font-semibold text-brand hover:text-white inline-flex items-center gap-1">
                 All articles <ArrowUpRight size={14} />
               </Link>
             </div>
-            <div className="grid md:grid-cols-3 gap-6">
-              {articles.map(a => (
-                <Link
-                  key={a.id}
-                  href={`/blog/${a.slug}`}
-                  className="group block rounded-xl bg-ink-800 border border-white/5 hover:border-brand/40 transition-colors overflow-hidden"
-                >
-                  {a.cover_url ? (
-                    <Image
-                      src={a.cover_url}
-                      alt={a.title}
-                      width={640}
-                      height={360}
-                      className="aspect-video object-cover w-full"
-                    />
-                  ) : (
-                    <div className="aspect-video bg-gradient-to-br from-brand/20 to-ink-700" />
-                  )}
-                  <div className="p-5">
-                    <div className="text-[11px] uppercase tracking-widest text-brand mb-2">
-                      {a.related_genre ? GENRE_BY_SLUG[a.related_genre]?.name : 'News'}
-                    </div>
-                    <h3 className="text-lg font-semibold leading-snug mb-2 group-hover:text-brand transition-colors line-clamp-2">
-                      {a.title}
-                    </h3>
-                    <p className="text-ink-300 text-sm line-clamp-2">{a.excerpt}</p>
+
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Featured (large), spans 2 cols on lg+ */}
+              <Link href={`/blog/${featuredArticle.slug}`} className="lg:col-span-2 group block rounded-xl bg-ink-800 border border-white/5 hover:border-brand/40 transition-colors overflow-hidden">
+                {featuredArticle.cover_url ? (
+                  <Image src={featuredArticle.cover_url} alt={featuredArticle.title} width={1200} height={675} className="aspect-video object-cover w-full" priority />
+                ) : (
+                  <div className="aspect-video bg-gradient-to-br from-brand/30 to-ink-700" />
+                )}
+                <div className="p-6 sm:p-8">
+                  <div className="text-[11px] uppercase tracking-widest text-brand mb-3">
+                    Featured · {featuredArticle.related_genre ? GENRE_BY_SLUG[featuredArticle.related_genre]?.name : 'News'}
                   </div>
-                </Link>
-              ))}
+                  <h3 className="text-2xl sm:text-3xl font-display uppercase tracking-tightest leading-tight mb-3 group-hover:text-brand transition-colors line-clamp-3">
+                    {featuredArticle.title}
+                  </h3>
+                  <p className="text-ink-200 line-clamp-3">{featuredArticle.excerpt}</p>
+                </div>
+              </Link>
+
+              {/* Up to 5 secondary articles, stacked on the right on lg+ */}
+              <div className="space-y-4">
+                {otherArticles.map(a => (
+                  <Link key={a.id} href={`/blog/${a.slug}`} className="group flex gap-4 rounded-lg bg-ink-800 border border-white/5 hover:border-brand/40 transition-colors overflow-hidden">
+                    {a.cover_url ? (
+                      <Image src={a.cover_url} alt={a.title} width={140} height={140} className="w-24 h-24 sm:w-28 sm:h-28 object-cover shrink-0" />
+                    ) : (
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 shrink-0 bg-gradient-to-br from-brand/20 to-ink-700" />
+                    )}
+                    <div className="py-3 pr-4 min-w-0">
+                      <div className="text-[10px] uppercase tracking-widest text-brand mb-1">
+                        {a.related_genre ? GENRE_BY_SLUG[a.related_genre]?.name : 'News'}
+                      </div>
+                      <h3 className="text-sm font-semibold leading-snug group-hover:text-brand transition-colors line-clamp-3">
+                        {a.title}
+                      </h3>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -250,10 +216,7 @@ export default async function HomePage() {
           <p className="text-ink-200 text-lg mb-8 max-w-xl mx-auto">
             One flat fee. Real fans. Real ranking. Real award. The path to the top starts here.
           </p>
-          <Link
-            href="/add-a-song"
-            className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-8 py-4 text-lg transition-colors"
-          >
+          <Link href="/add-a-song" className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-8 py-4 text-lg transition-colors">
             Add Your Song <ArrowUpRight size={20} />
           </Link>
         </div>
