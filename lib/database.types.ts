@@ -17,6 +17,7 @@ export type GenreSlug =
   | 'french'
   | 'classical'
   | 'soundtrack'
+  | 'gospel'
   | 'world';
 
 export type EntryStatus = 'pending_payment' | 'active' | 'rejected' | 'archived';
