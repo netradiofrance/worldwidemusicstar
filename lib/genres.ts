@@ -27,6 +27,7 @@ export const GENRES: GenreMeta[] = [
   { slug: 'french',      name: 'French',        short: 'French',     description: 'The best of French-language music.',                      accentClass: 'text-blue-400',     bgClass: 'bg-blue-500' },
   { slug: 'classical',   name: 'Classical',     short: 'Classical',  description: 'Classical and contemporary orchestral.',                  accentClass: 'text-emerald-400',  bgClass: 'bg-emerald-500' },
   { slug: 'soundtrack',  name: 'Soundtrack',    short: 'Soundtrack', description: 'Film, TV and game soundtracks.',                          accentClass: 'text-sky-400',      bgClass: 'bg-sky-500' },
+  { slug: 'gospel',      name: 'Gospel',        short: 'Gospel',     description: 'Gospel, spiritual and contemporary Christian music.',     accentClass: 'text-amber-300',    bgClass: 'bg-amber-400' },
   { slug: 'world',       name: 'World',         short: 'World',      description: 'World, fusion and global sounds.',                        accentClass: 'text-teal-400',     bgClass: 'bg-teal-500' },
 ];
 
