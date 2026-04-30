@@ -5,13 +5,18 @@
 export type GenreSlug =
   | 'hiphop-rap'
   | 'electro'
+  | 'dance'
   | 'pop'
   | 'rock'
+  | 'metal'
   | 'country'
   | 'latin'
+  | 'reggae'
+  | 'funk'
   | 'jazz'
   | 'french'
   | 'classical'
+  | 'soundtrack'
   | 'world';
 
 export type EntryStatus = 'pending_payment' | 'active' | 'rejected' | 'archived';
@@ -25,23 +30,23 @@ export interface Track {
   song_title: string;
   genre: GenreSlug;
   email: string;
-  spotify_track_id: string | null;
   spotify_url: string | null;
-  spotify_followers: number;
-  spotify_followers_updated_at: string | null;
+  spotify_track_id: string | null;
+  spotify_artist_id: string | null;
   cover_url: string | null;
   youtube_url: string | null;
-  youtube_channel_id: string | null;
   youtube_video_id: string | null;
+  youtube_channel_id: string | null;
+  votes_count: number;
+  spotify_followers: number;
+  spotify_followers_updated_at: string | null;
   youtube_subscribers: number;
   youtube_subscribers_updated_at: string | null;
-  votes_count: number;
   score: number;
   status: EntryStatus;
-  is_admin_added: boolean;
-  paid_at: string | null;
   created_at: string;
   updated_at: string;
+  activated_at: string | null;
   archived_at: string | null;
 }
 
@@ -49,102 +54,103 @@ export interface Article {
   id: string;
   slug: string;
   title: string;
-  excerpt: string | null;
-  content_md: string;
+  excerpt: string;
+  body_md: string;
   cover_url: string | null;
-  cover_prompt: string | null;
-  related_track_id: string | null;
   related_genre: GenreSlug | null;
+  related_track_id: string | null;
   status: ArticleStatus;
-  generated_by: string;
+  generated_by: string | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface Award {
+export interface Vote {
   id: string;
-  period_year: number;
-  period_month: number;
   track_id: string;
-  votes_count: number;
-  score: number;
-  trophy_image_url: string | null;
+  voter_hash: string;
+  ip_inet: string | null;
+  user_agent: string | null;
+  ad_session_id: string | null;
+  ad_completed: boolean;
+  created_at: string;
+}
+
+export interface Payment {
+  id: string;
+  track_id: string;
+  provider: PaymentProvider;
+  provider_order_id: string | null;
+  provider_capture_id: string | null;
+  amount_usd: number;
+  status: PaymentStatus;
+  raw_payload: any | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Subscriber {
+  id: string;
+  email: string;
+  source: string | null;
   created_at: string;
 }
 
 export interface ChartArchive {
   id: string;
-  period_year: number;
-  period_month: number;
+  period: string;
+  scope: string;
   genre: GenreSlug | null;
-  ranking: ArchivedRanking[];
-  created_at: string;
-}
-
-export interface ArchivedRanking {
   rank: number;
   track_id: string;
-  artist: string;
-  song: string;
-  score: number;
-  votes: number;
-  spotify: number;
-  youtube: number;
+  artist_name: string;
+  song_title: string;
   cover_url: string | null;
+  votes_count: number;
+  spotify_followers: number;
+  youtube_subscribers: number;
+  score: number;
+  archived_at: string;
 }
 
-export type Database = {
+export interface Award {
+  id: string;
+  period: string;
+  track_id: string;
+  artist_name: string;
+  song_title: string;
+  scope: string;
+  notes: string | null;
+  awarded_at: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  password_hash: string;
+  role: string;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+// Supabase typed client convenience type
+export interface Database {
   public: {
     Tables: {
-      tracks: {
-        Row: Track;
-        Insert: Partial<Track> &
-          Pick<Track, 'artist_name' | 'song_title' | 'genre' | 'email'>;
-        Update: Partial<Track>;
-      };
-      articles: {
-        Row: Article;
-        Insert: Partial<Article> & Pick<Article, 'slug' | 'title' | 'content_md'>;
-        Update: Partial<Article>;
-      };
-      awards: { Row: Award; Insert: Partial<Award>; Update: Partial<Award> };
-      chart_archives: {
-        Row: ChartArchive;
-        Insert: Partial<ChartArchive>;
-        Update: Partial<ChartArchive>;
-      };
       genres: {
         Row: { slug: GenreSlug; name: string; display_order: number; created_at: string };
         Insert: { slug: GenreSlug; name: string; display_order?: number };
         Update: Partial<{ slug: GenreSlug; name: string; display_order: number }>;
       };
-      subscribers: {
-        Row: { id: string; email: string; source: string; confirmed: boolean; created_at: string };
-        Insert: { email: string; source?: string; confirmed?: boolean };
-        Update: Partial<{ email: string; source: string; confirmed: boolean }>;
-      };
-      payments: {
-        Row: {
-          id: string; track_id: string | null;
-          provider: PaymentProvider; provider_order_id: string | null;
-          provider_capture_id: string | null;
-          amount_usd: number; currency: string; status: PaymentStatus;
-          raw_payload: unknown; created_at: string; completed_at: string | null;
-        };
-        Insert: { track_id?: string | null; provider: PaymentProvider; amount_usd: number; status?: PaymentStatus; provider_order_id?: string | null; raw_payload?: unknown };
-        Update: Partial<{ status: PaymentStatus; provider_capture_id: string | null; raw_payload: unknown; completed_at: string | null }>;
-      };
-      votes: {
-        Row: { id: string; track_id: string; voter_hash: string; ip_inet: string | null; user_agent: string | null; ad_session_id: string | null; ad_completed: boolean; created_at: string };
-        Insert: { track_id: string; voter_hash: string; ip_inet?: string | null; user_agent?: string | null; ad_session_id?: string | null; ad_completed?: boolean };
-        Update: Partial<{ ad_completed: boolean }>;
-      };
-      admin_users: {
-        Row: { id: string; email: string; password_hash: string; role: string; created_at: string; last_login_at: string | null };
-        Insert: { email: string; password_hash: string; role?: string };
-        Update: Partial<{ password_hash: string; role: string; last_login_at: string }>;
-      };
+      tracks:        { Row: Track;        Insert: Partial<Track>;        Update: Partial<Track> };
+      articles:      { Row: Article;      Insert: Partial<Article>;      Update: Partial<Article> };
+      votes:         { Row: Vote;         Insert: Partial<Vote>;         Update: Partial<Vote> };
+      payments:      { Row: Payment;      Insert: Partial<Payment>;      Update: Partial<Payment> };
+      subscribers:   { Row: Subscriber;   Insert: Partial<Subscriber>;   Update: Partial<Subscriber> };
+      chart_archives:{ Row: ChartArchive; Insert: Partial<ChartArchive>; Update: Partial<ChartArchive> };
+      awards:        { Row: Award;        Insert: Partial<Award>;        Update: Partial<Award> };
+      admin_users:   { Row: AdminUser;    Insert: Partial<AdminUser>;    Update: Partial<AdminUser> };
     };
   };
-};
+}
