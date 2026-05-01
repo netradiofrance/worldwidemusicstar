@@ -13,21 +13,18 @@ export const maxDuration = 60;
  *
  * Sends reminders to artists who started a registration but never completed
  * payment. Schedule: 30 min after creation, then once a day for the next
- * 7 days. After 7 days the track is auto-archived.
+ * 7 days. After 8 reminders the track is auto-archived.
+ *
+ * Skips tracks where `unsubscribed_at` is set (List-Unsubscribe respected).
  *
  * To pace correctly, we record each send in `tracks.payment_reminder_sent_at`
  * and `tracks.payment_reminder_count`. The cron picks every track whose
  * "next reminder due time" is in the past.
  *
  * On Vercel Hobby this cron is wired to run once per day. That gives the
- * artist 7 daily nudges after the initial 30-min one (which is sent
- * naturally on the next cron tick — so we accept the 30-min granularity
- * is in fact "next cron run", which on Hobby is 1/day).
- *
- * If Hobby's 1-cron-per-day limit is too coarse, the user can wire an
- * external cron service (cron-job.org, EasyCron, etc.) to ping this
- * endpoint every 15-30 minutes — the auth via x-cron-secret still
- * works for those.
+ * artist 7 daily nudges after the initial 30-min one. If finer cadence is
+ * needed, an external cron service (cron-job.org, EasyCron) can hit this
+ * endpoint every 30 minutes — the cron-secret auth still works.
  */
 export async function POST(req: Request) {
   if (!(await authorizeCron(req))) return new NextResponse('unauthorized', { status: 401 });
@@ -46,18 +43,33 @@ async function run() {
   const sb = createServerClient();
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://worldwidemusicstar.com').replace(/\/$/, '');
 
-  // 1. Pick all pending tracks
+  // 1. Pick all pending tracks (also ignore unsubscribed)
   const { data: tracks, error } = await sb
     .from('tracks')
-    .select('id, artist_name, song_title, genre, email, status, created_at, payment_reminder_sent_at, payment_reminder_count')
+    .select('id, artist_name, song_title, genre, email, status, created_at, payment_reminder_sent_at, payment_reminder_count, unsubscribed_at')
     .eq('status', 'pending_payment')
+    .is('unsubscribed_at', null)
     .order('created_at', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  let sent = 0, archived = 0, skipped = 0;
+  let sent = 0, archived = 0, skipped = 0, unsubscribedSkipped = 0;
   const now = Date.now();
 
+  // Build a Set of unsubscribed emails so we also skip if ANY of the
+  // user's other tracks unsubscribed (cross-track opt-out)
+  const { data: optOuts } = await sb
+    .from('tracks')
+    .select('email')
+    .not('unsubscribed_at', 'is', null);
+  const unsubscribedEmails = new Set((optOuts ?? []).map(r => r.email.toLowerCase()));
+
   for (const t of tracks ?? []) {
+    // Defensive double-check
+    if (unsubscribedEmails.has(t.email.toLowerCase())) {
+      unsubscribedSkipped++;
+      continue;
+    }
+
     const created = new Date(t.created_at).getTime();
     const lastSent = t.payment_reminder_sent_at ? new Date(t.payment_reminder_sent_at).getTime() : null;
     const count = t.payment_reminder_count ?? 0;
@@ -75,10 +87,8 @@ async function run() {
     // Decide whether this track is due for a reminder
     let due = false;
     if (count === 0) {
-      // First reminder: 30 min after creation
       due = (now - created) >= FIRST_REMINDER_AFTER_MS;
     } else if (lastSent !== null) {
-      // Subsequent reminders: every 24h after the last send
       due = (now - lastSent) >= DAILY_REMINDER_INTERVAL_MS;
     }
 
@@ -113,6 +123,7 @@ async function run() {
     sent,
     archived,
     skipped,
+    unsubscribedSkipped,
     totalPending: tracks?.length ?? 0,
   });
 }
