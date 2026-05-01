@@ -1,7 +1,9 @@
 import { createServerClient } from '@/lib/supabase';
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { GENRE_BY_SLUG } from '@/lib/genres';
 import { formatNumber } from '@/lib/scoring';
+import { TrackListActions } from '@/components/admin/TrackListActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,8 +22,11 @@ export default async function AdminArtistsPage() {
           <h1 className="font-display uppercase text-4xl tracking-tightest mb-1">Artists & Tracks</h1>
           <p className="text-ink-300">Manage every entry in the database.</p>
         </div>
-        <Link href="/admin/artists/new" className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-5 py-2.5 text-sm">
-          + Add manual entry
+        <Link
+          href="/admin/artists/new"
+          className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-5 py-2.5 text-sm"
+        >
+          <Plus size={15} /> Add manual entry
         </Link>
       </div>
 
@@ -56,7 +61,7 @@ export default async function AdminArtistsPage() {
                 <td className="px-4 py-3 text-right tabular-nums text-ink-200">{formatNumber(t.votes_count)}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-ink-200">{formatNumber(Math.round(t.score))}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link href={`/admin/artists/${t.id}`} className="text-brand text-xs font-semibold hover:underline">Edit</Link>
+                  <TrackListActions track={t} />
                 </td>
               </tr>
             ))}
