@@ -11,6 +11,9 @@ export const dynamic = 'force-dynamic';
  * Admin "Send recovery email" — fires a payment reminder for one specific
  * pending track on demand, bypassing the daily cron schedule.
  *
+ * Respects unsubscribe — if the user has opted out (unsubscribed_at set
+ * on any of their tracks), this returns a 403 with a clear message.
+ *
  * The cron's pacing logic (count, sent_at) still gets updated so that the
  * automatic schedule continues correctly afterwards: this manual send
  * counts as one of the up-to-8 reminders the artist will receive.
@@ -29,7 +32,7 @@ export async function POST(req: Request) {
   const sb = createServerClient();
   const { data: track, error } = await sb
     .from('tracks')
-    .select('id, artist_name, song_title, genre, email, status, payment_reminder_count')
+    .select('id, artist_name, song_title, genre, email, status, payment_reminder_count, unsubscribed_at')
     .eq('id', trackId)
     .maybeSingle();
 
@@ -40,6 +43,26 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: `Track status is "${track.status}" — recovery email is only for pending payments.` },
       { status: 400 },
+    );
+  }
+
+  // Respect unsubscribe — also check across all tracks for this email
+  if (track.unsubscribed_at) {
+    return NextResponse.json(
+      { error: 'This artist has unsubscribed and cannot be emailed.' },
+      { status: 403 },
+    );
+  }
+  const { data: optOuts } = await sb
+    .from('tracks')
+    .select('id')
+    .eq('email', track.email)
+    .not('unsubscribed_at', 'is', null)
+    .limit(1);
+  if (optOuts && optOuts.length > 0) {
+    return NextResponse.json(
+      { error: 'This email address has unsubscribed and cannot be contacted.' },
+      { status: 403 },
     );
   }
 
