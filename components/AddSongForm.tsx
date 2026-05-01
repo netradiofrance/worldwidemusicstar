@@ -15,25 +15,22 @@ interface SpotifySearchHit {
   external_url: string;
 }
 
-const PRICE_USD = Number(process.env.NEXT_PUBLIC_ENTRY_PRICE_USD ?? '99.99');
+const PRICE_EUR = Number(process.env.NEXT_PUBLIC_ENTRY_PRICE_EUR ?? '99.99');
+const PRICE_DISPLAY = `${PRICE_EUR.toFixed(2).replace('.', ',')} €`;
 
 export function AddSongForm() {
   const [email, setEmail] = useState('');
-  // Manual artist/song fields — always present, pre-filled if Spotify match selected.
   const [artistName, setArtistName] = useState('');
   const [songTitle, setSongTitle] = useState('');
-  // Spotify search/autocomplete (optional)
   const [search, setSearch] = useState('');
   const [hits, setHits] = useState<SpotifySearchHit[]>([]);
   const [chosen, setChosen] = useState<SpotifySearchHit | null>(null);
   const [searching, setSearching] = useState(false);
-  // Optional YouTube URL
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [genre, setGenre] = useState<GenreSlug | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Debounced Spotify search
   useEffect(() => {
     if (chosen) return;
     if (search.trim().length < 2) { setHits([]); return; }
@@ -57,7 +54,6 @@ export function AddSongForm() {
     setChosen(h);
     setHits([]);
     setSearch(`${h.artist_name} — ${h.name}`);
-    // Pre-fill the manual fields with Spotify data
     setArtistName(h.artist_name);
     setSongTitle(h.name);
   }
@@ -65,20 +61,18 @@ export function AddSongForm() {
   function clearChoice() {
     setChosen(null);
     setSearch('');
-    // Don't clear artist/song — user might want to keep what was filled
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    // Required: email, artist, title, genre. YouTube is optional.
     if (!email || !genre || !artistName.trim() || !songTitle.trim()) {
       setError('Please fill in your email, artist name, song title, and genre.');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/payment/paypal/create', {
+      const res = await fetch('/api/payment/vivid/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,9 +93,8 @@ export function AddSongForm() {
         setSubmitting(false);
         return;
       }
-      // Redirect to PayPal approval URL
       window.location.href = data.approveUrl;
-    } catch (err) {
+    } catch {
       setError('Network error. Please try again.');
       setSubmitting(false);
     }
@@ -109,7 +102,6 @@ export function AddSongForm() {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl bg-ink-800 border border-white/10 p-6 sm:p-8 space-y-6">
-      {/* Email */}
       <div>
         <label className="block text-sm font-semibold mb-2">Your email</label>
         <input
@@ -123,7 +115,6 @@ export function AddSongForm() {
         <p className="text-xs text-ink-400 mt-2">Used for confirmation and chart updates. Never shared.</p>
       </div>
 
-      {/* Spotify search — OPTIONAL */}
       <div>
         <label className="block text-sm font-semibold mb-2">
           Find your song on Spotify <span className="text-ink-400 font-normal">(optional)</span>
@@ -137,15 +128,12 @@ export function AddSongForm() {
             className="w-full rounded-lg bg-ink-700 border border-white/10 px-4 py-3 pl-11 text-white placeholder-ink-400 focus:border-brand"
           />
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-          {searching && (
-            <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-400 animate-spin" />
-          )}
+          {searching && <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-400 animate-spin" />}
           {chosen && (
             <button type="button" onClick={clearChoice} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-300 hover:text-white">
               Clear
             </button>
           )}
-
           {!chosen && hits.length > 0 && (
             <ul className="absolute z-20 mt-1 w-full bg-ink-800 border border-white/10 rounded-lg shadow-xl max-h-80 overflow-auto">
               {hits.map(h => (
@@ -155,11 +143,7 @@ export function AddSongForm() {
                     onClick={() => selectHit(h)}
                     className="w-full text-left flex items-center gap-3 p-3 hover:bg-ink-700 transition-colors"
                   >
-                    {h.album_cover_url ? (
-                      <Image src={h.album_cover_url} alt="" width={40} height={40} className="rounded" />
-                    ) : (
-                      <div className="w-10 h-10 rounded bg-ink-600" />
-                    )}
+                    {h.album_cover_url ? <Image src={h.album_cover_url} alt="" width={40} height={40} className="rounded" /> : <div className="w-10 h-10 rounded bg-ink-600" />}
                     <div className="min-w-0">
                       <div className="font-semibold text-white truncate">{h.name}</div>
                       <div className="text-xs text-ink-300 truncate">{h.artist_name}</div>
@@ -170,13 +154,10 @@ export function AddSongForm() {
             </ul>
           )}
         </div>
-
         {chosen && (
           <div className="mt-3 flex items-center gap-3 p-3 bg-ink-700/60 rounded-lg border border-emerald-500/30">
             <Check size={16} className="text-emerald-400 shrink-0" />
-            {chosen.album_cover_url && (
-              <Image src={chosen.album_cover_url} alt="" width={36} height={36} className="rounded" />
-            )}
+            {chosen.album_cover_url && <Image src={chosen.album_cover_url} alt="" width={36} height={36} className="rounded" />}
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-white truncate">{chosen.name}</div>
               <div className="text-xs text-ink-300 truncate">{chosen.artist_name}</div>
@@ -188,7 +169,6 @@ export function AddSongForm() {
         </p>
       </div>
 
-      {/* Artist name (always required, pre-filled if Spotify match) */}
       <div>
         <label className="block text-sm font-semibold mb-2">Artist name</label>
         <input
@@ -201,7 +181,6 @@ export function AddSongForm() {
         />
       </div>
 
-      {/* Song title (always required, pre-filled if Spotify match) */}
       <div>
         <label className="block text-sm font-semibold mb-2">Song title</label>
         <input
@@ -214,24 +193,22 @@ export function AddSongForm() {
         />
       </div>
 
-      {/* YouTube URL — OPTIONAL */}
       <div>
         <label className="block text-sm font-semibold mb-2">
-          YouTube video URL <span className="text-ink-400 font-normal">(optional)</span>
+          YouTube URL <span className="text-ink-400 font-normal">(optional)</span>
         </label>
         <input
           type="url"
           value={youtubeUrl}
           onChange={e => setYoutubeUrl(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=…"
+          placeholder="https://www.youtube.com/watch?v=… or your channel URL"
           className="w-full rounded-lg bg-ink-700 border border-white/10 px-4 py-3 text-white placeholder-ink-400 focus:border-brand"
         />
         <p className="text-xs text-ink-400 mt-2">
-          If provided, your YouTube subscribers count is fetched and added to your score. No clip yet? Leave blank — you can add it later.
+          A video URL or your channel URL — your YouTube subscribers count is fetched and added to your score. No clip yet? Leave blank.
         </p>
       </div>
 
-      {/* Genre */}
       <div>
         <label className="block text-sm font-semibold mb-2">Genre</label>
         <select
@@ -247,11 +224,10 @@ export function AddSongForm() {
         </select>
       </div>
 
-      {/* Pricing */}
       <div className="rounded-xl bg-ink-700/50 border border-white/5 p-5">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm text-ink-200">Chart entry — flat fee</div>
-          <div className="font-display text-3xl text-brand">${PRICE_USD.toFixed(2)}</div>
+          <div className="font-display text-3xl text-brand">{PRICE_DISPLAY}</div>
         </div>
         <ul className="text-xs text-ink-300 space-y-1 mt-2">
           <li>• Live ranking on your genre chart</li>
@@ -271,10 +247,10 @@ export function AddSongForm() {
         disabled={submitting}
         className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-4 text-lg transition-colors disabled:opacity-60 disabled:cursor-wait"
       >
-        {submitting ? <><Loader2 size={18} className="animate-spin" /> Redirecting to PayPal…</> : `Pay $${PRICE_USD.toFixed(2)} via PayPal`}
+        {submitting ? <><Loader2 size={18} className="animate-spin" /> Redirecting to secure checkout…</> : `Pay ${PRICE_DISPLAY} — Card · Apple Pay · Google Pay`}
       </button>
       <p className="text-xs text-ink-400 text-center">
-        Secure payment via PayPal. Stripe support coming soon.
+        Secure payment powered by Vivid. No account required — Visa, Mastercard, Apple Pay, Google Pay.
       </p>
     </form>
   );
