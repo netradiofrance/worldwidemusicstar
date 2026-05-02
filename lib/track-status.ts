@@ -9,19 +9,25 @@ import { GENRE_BY_SLUG } from '@/lib/genres';
  *
  * Used by:
  *   1. The Vivid webhook (automatic activation)
- *   2. The admin "Mark as paid" action (manual fallback if the webhook
- *      didn't fire — e.g. delivery failure, server hiccup)
+ *   2. The Vivid redirect success page (primary path — Vivid only
+ *      redirects on actual payment success)
+ *   3. The admin "Mark as paid" action (manual fallback)
  *
- * Why a shared helper: keeping these two paths bit-for-bit identical
- * means an admin manually marking a track produces exactly the same
- * downstream artifacts as the webhook would have — same emails, same
- * activated_at timestamp shape, same payment row update.
+ * Why a shared helper: keeping these three paths bit-for-bit identical
+ * means whichever route fires first produces exactly the same downstream
+ * artifacts — same emails, same paid_at timestamp, same payment row update.
+ *
+ * Activation timestamp note: we store it in `paid_at`. We do NOT use a
+ * dedicated `activated_at` column because that column does not exist in
+ * the schema (Supabase will reject the UPDATE silently and the track
+ * stays pending). The combination of `paid_at` and the auto-managed
+ * `updated_at` is enough to know when activation happened.
  */
 export async function activateTrack(opts: {
   trackId: string;
-  paymentProviderId?: string;   // Vivid paymentId or 'admin-manual'
-  rawProviderPayload?: unknown; // Stored as audit trail
-  source: 'webhook' | 'admin-manual';
+  paymentProviderId?: string;
+  rawProviderPayload?: unknown;
+  source: 'webhook' | 'redirect' | 'admin-manual';
 }): Promise<{ ok: true; alreadyActive: boolean } | { ok: false; error: string }> {
   const sb = createServerClient();
 
@@ -44,12 +50,13 @@ export async function activateTrack(opts: {
     return { ok: false, error: `Cannot activate a track in status "${track.status}"` };
   }
 
-  // 1. Activate the track
+  // 1. Activate the track. We set paid_at if it's not already set;
+  //    `updated_at` is updated automatically by Supabase via a trigger.
   const { error: updateErr } = await sb
     .from('tracks')
     .update({
       status: 'active',
-      activated_at: new Date().toISOString(),
+      paid_at: new Date().toISOString(),
     })
     .eq('id', track.id);
 
@@ -68,7 +75,7 @@ export async function activateTrack(opts: {
     .eq('track_id', track.id)
     .eq('status', 'pending');
 
-  // 3. Send confirmation + receipt emails (best effort)
+  // 3. Send confirmation + receipt emails (best effort — non-fatal)
   try {
     const genreName = GENRE_BY_SLUG[track.genre]?.name ?? track.genre;
     const trackUrl = `${(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://worldwidemusicstar.com').replace(/\/$/, '')}/track/${track.id}`;
@@ -90,8 +97,6 @@ export async function activateTrack(opts: {
     });
     await sendEmail({ to: track.email, ...receipt });
   } catch (e) {
-    // Email failure is non-fatal — the track is activated, the admin
-    // can resend confirmation manually if needed.
     console.error('[activateTrack] email send failed (non-fatal):', e);
   }
 
