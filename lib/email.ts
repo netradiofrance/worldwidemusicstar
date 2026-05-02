@@ -1,25 +1,20 @@
 import Mailjet from 'node-mailjet';
+import { signPixelToken } from '@/lib/email-tracking';
 
 /**
  * Mail sending lib for WorldWide Music Star.
  *
  * Deliverability tuning baked in:
- *   - Rich plain-text alternative on every send (not just HTML stripped):
- *     fixes the SpamAssassin "HTML_IMAGE_ONLY" / low-text complaint.
- *   - List-Unsubscribe header (RFC 8058 one-click + mailto): gives Gmail
- *     and Outlook a clear "this sender respects unsubscribe" signal.
- *     Hugely positive on inbox placement. Auto-injected for any send
- *     whose subject hints at a non-receipt category — receipts stay pure
- *     transactional and skip the header.
- *   - Subjects avoid spam-trigger phrases ("Last chance", high "payment"
- *     density) — registration-flavored wording carries less risk.
- *   - Footer carries a postal address: required by CAN-SPAM (US) and
- *     a soft signal everywhere else.
+ *   - Rich plain-text alternative on every send.
+ *   - List-Unsubscribe header (RFC 8058 + mailto) on non-receipt emails.
+ *   - Subjects avoid common spam triggers.
+ *   - Footer carries a postal address (CAN-SPAM / GDPR best practice).
  *
- * Env knobs:
- *   - MAILJET_FROM_EMAIL / MAILJET_FROM_NAME  (sender identity)
- *   - MAIL_POSTAL_ADDRESS                     (footer postal address)
- *   - NEXT_PUBLIC_SITE_URL                    (base for unsubscribe URL)
+ * Reminder emails additionally include a 1x1 tracking pixel so we can
+ * estimate open rates over time (with the usual Gmail/Apple proxy
+ * caveats). Other email types (confirmation, receipt) intentionally do
+ * NOT carry the pixel — those go to artists who just paid us, we know
+ * they got the message.
  */
 
 let client: ReturnType<typeof Mailjet.apiConnect> | null = null;
@@ -37,9 +32,6 @@ function getClient() {
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://worldwidemusicstar.com').replace(/\/$/, '');
 const SUPPORT_EMAIL = process.env.MAILJET_FROM_EMAIL ?? 'contact@worldwidemusicstar.com';
-
-// Postal address shown in every email footer — required by anti-spam laws
-// (CAN-SPAM US, GDPR EU best practice) and improves deliverability scoring.
 const POSTAL_ADDRESS = process.env.MAIL_POSTAL_ADDRESS ?? 'WorldWide Music Star — NetRadio Network';
 
 export interface SendEmailParams {
@@ -47,7 +39,6 @@ export interface SendEmailParams {
   subject: string;
   html: string;
   text?: string;
-  /** Optional explicit unsubscribe URL. If absent, auto-inferred for non-receipts. */
   unsubscribeUrl?: string;
 }
 
@@ -55,10 +46,6 @@ export async function sendEmail({ to, subject, html, text, unsubscribeUrl }: Sen
   const fromEmail = process.env.MAILJET_FROM_EMAIL ?? 'contact@worldwidemusicstar.com';
   const fromName = process.env.MAILJET_FROM_NAME ?? 'WorldWide Music Star';
 
-  // For non-receipt emails (anything that is not a hard transactional doc
-  // the user explicitly bought), we auto-attach a List-Unsubscribe header.
-  // Receipts skip it because they are post-purchase records the user
-  // legally needs to keep.
   const isReceipt = /\breceipt\b/i.test(subject);
   const finalUnsubUrl = unsubscribeUrl
     ?? (isReceipt ? undefined : `${SITE_URL}/unsubscribe?email=${encodeURIComponent(to)}`);
@@ -72,9 +59,6 @@ export async function sendEmail({ to, subject, html, text, unsubscribeUrl }: Sen
   };
 
   if (finalUnsubUrl) {
-    // Two-step List-Unsubscribe: HTTP one-click (RFC 8058) + mailto fallback.
-    // Gmail honors the HTTP one-click and shows the "Unsubscribe" chip in
-    // the inbox header when this is present and well-formed.
     message.Headers = {
       'List-Unsubscribe': `<${finalUnsubUrl}>, <mailto:${SUPPORT_EMAIL}?subject=unsubscribe>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -87,11 +71,6 @@ export async function sendEmail({ to, subject, html, text, unsubscribeUrl }: Sen
   return result.body;
 }
 
-/**
- * Better fallback than naive tag-stripping: collapses whitespace, decodes
- * common entities, removes style/script blocks. Used only when a template
- * does not provide its own plain-text counterpart.
- */
 function htmlToPlainText(html: string): string {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -110,9 +89,6 @@ function htmlToPlainText(html: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
-
-// --- Email templates ---
-// All three templates share the same dark/red branding and Anton headline.
 
 const HEADER_BLOCK = `
 <tr><td style="padding:0 0 32px 0;text-align:center">
@@ -191,8 +167,6 @@ export function paymentReceiptEmail(opts: {
   const { artistName, songTitle, amount, orderId } = opts;
   const amountStr = `${amount.toFixed(2).replace('.', ',')} €`;
   return {
-    // The word "receipt" tells our sendEmail wrapper to skip the
-    // List-Unsubscribe header (this is a hard transactional message).
     subject: `Your receipt — WorldWide Music Star (${amountStr})`,
     html: `<!doctype html><html><body style="background:#0A0A0A;color:#F5F5F5;font-family:Inter,Arial,sans-serif;margin:0;padding:0">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:40px 20px">
@@ -230,48 +204,46 @@ export function paymentReceiptEmail(opts: {
 }
 
 // =========================================================================
-// 3. Recovery email — sent when an artist starts a registration but does
-//    not complete the payment step. 30 min after, then once a day for up
-//    to 7 days. Subject + intro adapt by attempt number to stay friendly
-//    rather than pushy (no "Last chance!" — that triggers spam filters).
+// 3. Reminder email — abandoned-cart recovery.
+//    Includes the open-tracking pixel.
 // =========================================================================
 
-export function paymentReminderEmail(opts: {
+export async function paymentReminderEmail(opts: {
+  trackId: string;          // needed for the tracking pixel token
   artistName: string;
   songTitle: string;
   genreName: string;
   recoverUrl: string;
-  attemptNumber: number; // 1 = first reminder, ascending
-}): { subject: string; html: string; text: string } {
-  const { artistName, songTitle, genreName, recoverUrl, attemptNumber } = opts;
+  attemptNumber: number;
+}): Promise<{ subject: string; html: string; text: string }> {
+  const { trackId, artistName, songTitle, genreName, recoverUrl, attemptNumber } = opts;
 
-  // Subject lines tuned to avoid spammy triggers:
-  //   - no "Last chance", "Final notice", "Don't miss out", urgency caps
-  //   - no $/€ or numbers in subject (lower spam score)
-  //   - "registration" instead of "payment" — softer transactional tone
+  // Build the tracking pixel URL. We sign a JWT with the track id and
+  // the attempt # so we can correlate opens to specific reminders.
+  const pixelToken = await signPixelToken({
+    trackId,
+    emailType: 'payment_reminder',
+    attempt: attemptNumber,
+  });
+  const pixelUrl = `${SITE_URL}/api/track/email-open?t=${encodeURIComponent(pixelToken)}`;
+  const pixelTag = `<img src="${pixelUrl}" alt="" width="1" height="1" border="0" style="display:block;width:1px;height:1px;border:0;outline:none;text-decoration:none" />`;
+
   let subject: string;
   let intro: string;
   let introText: string;
 
   if (attemptNumber === 1) {
     subject = `Almost there — finish charting "${songTitle}"`;
-    intro =
-      `Your registration for <strong style="color:#fff">"${songTitle}"</strong> on the <strong style="color:#fff">${genreName}</strong> chart is one click away. The registration step did not complete — here is a quick way back to it.`;
-    introText =
-      `Your registration for "${songTitle}" on the ${genreName} chart is one click away. The registration step did not complete — here is a quick way back to it.`;
+    intro = `Your registration for <strong style="color:#fff">"${songTitle}"</strong> on the <strong style="color:#fff">${genreName}</strong> chart is one click away. The registration step did not complete — here is a quick way back to it.`;
+    introText = `Your registration for "${songTitle}" on the ${genreName} chart is one click away. The registration step did not complete — here is a quick way back to it.`;
   } else if (attemptNumber <= 3) {
     subject = `"${songTitle}" is waiting for you`;
-    intro =
-      `Just a quick reminder — your track <strong style="color:#fff">"${songTitle}"</strong> is reserved on the <strong style="color:#fff">${genreName}</strong> chart, but the registration is not yet finalized.`;
-    introText =
-      `Just a quick reminder — your track "${songTitle}" is reserved on the ${genreName} chart, but the registration is not yet finalized.`;
+    intro = `Just a quick reminder — your track <strong style="color:#fff">"${songTitle}"</strong> is reserved on the <strong style="color:#fff">${genreName}</strong> chart, but the registration is not yet finalized.`;
+    introText = `Just a quick reminder — your track "${songTitle}" is reserved on the ${genreName} chart, but the registration is not yet finalized.`;
   } else {
-    // Softer than "Last chance" — still conveys we're nearing the end
     subject = `We're holding your spot for "${songTitle}"`;
-    intro =
-      `We are still holding your spot for <strong style="color:#fff">"${songTitle}"</strong> on the <strong style="color:#fff">${genreName}</strong> chart. Here is the secure link to finalize whenever you are ready.`;
-    introText =
-      `We are still holding your spot for "${songTitle}" on the ${genreName} chart. Here is the secure link to finalize whenever you are ready.`;
+    intro = `We are still holding your spot for <strong style="color:#fff">"${songTitle}"</strong> on the <strong style="color:#fff">${genreName}</strong> chart. Here is the secure link to finalize whenever you are ready.`;
+    introText = `We are still holding your spot for "${songTitle}" on the ${genreName} chart. Here is the secure link to finalize whenever you are ready.`;
   }
 
   return {
@@ -293,7 +265,7 @@ export function paymentReminderEmail(opts: {
     </td></tr>
     ${FOOTER_BLOCK}
   </table>
-</td></tr></table></body></html>`,
+</td></tr></table>${pixelTag}</body></html>`,
     text: [
       `One step left.`,
       ``,
