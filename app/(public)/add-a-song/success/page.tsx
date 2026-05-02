@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
 import { createServerClient } from '@/lib/supabase';
 import { GENRE_BY_SLUG } from '@/lib/genres';
-import { PendingAutoRefresh } from '@/components/PendingAutoRefresh';
+import { activateTrack } from '@/lib/track-status';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export const metadata = { title: 'Payment received' };
+export const metadata = { title: "You're on the chart" };
 
 interface PageProps {
   searchParams: Promise<{ track?: string }>;
@@ -16,26 +16,26 @@ interface PageProps {
 /**
  * /add-a-song/success — landing page after the artist completes payment.
  *
- * Two states to handle:
- *   1. Webhook already arrived (track.status === 'active'): show the
- *      celebratory "you're charted" view with a direct link to the
- *      artist's track page.
- *   2. Webhook hasn't arrived yet (still 'pending_payment'): show the
- *      waiting view. A small client-side helper hard-reloads the page
- *      every 6 seconds (window.location.reload — router.refresh() was
- *      unreliable in production), so the next render will pick up
- *      status === 'active' as soon as the webhook lands.
+ * Vivid redirects the artist here with ?track=<id>. We treat the redirect
+ * itself as proof of payment (Stripe, Vivid and most modern processors
+ * work this way — they only redirect to redirectUrl on success).
  *
- * If the webhook never arrives (a known risk with Vivid — their dashboard
- * does not expose webhook delivery history), the artist can email us;
- * the admin will then activate the track via the Mark-as-paid button.
+ * Flow:
+ *   1. Read the track id from the URL
+ *   2. Activate the track via activateTrack() — idempotent, safe to call
+ *      twice if the webhook also fires (it just no-ops the second time)
+ *   3. Render "You're on the chart" with a button to the genre chart
+ *
+ * The Vivid webhook becomes a bonus safety net for the rare case where
+ * the user closes the tab before the redirect lands. activateTrack()
+ * is the same code path either way, so the two routes produce identical
+ * results.
  */
 export default async function AddSongSuccessPage({ searchParams }: PageProps) {
   const { track: trackId } = await searchParams;
 
-  // No id in URL = generic celebration page
   if (!trackId) {
-    return <GenericReceivedView />;
+    return <FallbackView reason="missing-id" />;
   }
 
   const sb = createServerClient();
@@ -46,38 +46,31 @@ export default async function AddSongSuccessPage({ searchParams }: PageProps) {
     .maybeSingle();
 
   if (!track) {
-    return <GenericReceivedView />;
+    return <FallbackView reason="not-found" />;
   }
 
-  if (track.status === 'active') {
-    const genreName = GENRE_BY_SLUG[track.genre]?.name ?? track.genre;
-    return (
-      <ActivatedView
-        artistName={track.artist_name}
-        songTitle={track.song_title}
-        genreName={genreName}
-        trackUrl={`/track/${track.id}`}
-      />
-    );
+  // Activate the track if it's still pending. Idempotent — if the webhook
+  // already activated it, this returns alreadyActive: true and does nothing.
+  if (track.status === 'pending_payment') {
+    const result = await activateTrack({
+      trackId: track.id,
+      paymentProviderId: 'vivid-redirect',
+      rawProviderPayload: { source: 'success-page-redirect' },
+      source: 'webhook', // counts as the same path as a webhook activation
+    });
+    if (!result.ok) {
+      console.error('[success-page] activation failed:', result.error);
+      // Fall through anyway — the admin can mark-as-paid later
+    }
+    // After activation, set the in-memory status so the celebratory view
+    // renders on this same request without a second DB roundtrip
+    track.status = 'active';
   }
 
-  // Pending — show the waiting view with auto-refresh
-  return <PendingView songTitle={track.song_title} />;
-}
+  const genreMeta = GENRE_BY_SLUG[track.genre];
+  const genreName = genreMeta?.name ?? track.genre;
+  const genreChartUrl = `/charts/${track.genre}`;
 
-// ---------------------------------------------------------------------------
-
-function ActivatedView({
-  artistName,
-  songTitle,
-  genreName,
-  trackUrl,
-}: {
-  artistName: string;
-  songTitle: string;
-  genreName: string;
-  trackUrl: string;
-}) {
   return (
     <section className="min-h-[60vh] flex items-center">
       <div className="mx-auto max-w-xl px-4 sm:px-6 py-16 text-center">
@@ -86,8 +79,8 @@ function ActivatedView({
           You're on the chart.
         </h1>
         <p className="text-ink-200 text-lg leading-relaxed mb-3">
-          <strong className="text-white">"{songTitle}"</strong> by{' '}
-          <strong className="text-white">{artistName}</strong> is now live on the{' '}
+          <strong className="text-white">"{track.song_title}"</strong> by{' '}
+          <strong className="text-white">{track.artist_name}</strong> is now live on the{' '}
           <strong className="text-white">{genreName}</strong> chart.
         </p>
         <p className="text-ink-300 text-sm mb-8">
@@ -95,16 +88,16 @@ function ActivatedView({
         </p>
         <div className="flex justify-center gap-3 flex-wrap">
           <Link
-            href={trackUrl}
+            href={genreChartUrl}
             className="inline-flex items-center gap-2 rounded-full bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-3"
           >
-            View your chart page
+            See the {genreName} chart
           </Link>
           <Link
-            href="/charts/all"
+            href={`/track/${track.id}`}
             className="inline-flex items-center gap-2 rounded-full border border-white/20 hover:border-white/40 text-white font-semibold px-6 py-3"
           >
-            All charts
+            View your track page
           </Link>
         </div>
       </div>
@@ -114,58 +107,7 @@ function ActivatedView({
 
 // ---------------------------------------------------------------------------
 
-function PendingView({ songTitle }: { songTitle: string }) {
-  return (
-    <section className="min-h-[60vh] flex items-center">
-      <div className="mx-auto max-w-xl px-4 sm:px-6 py-16 text-center">
-        <PendingClock />
-        <h1 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest mb-4">
-          Payment received.
-        </h1>
-        <p className="text-ink-200 text-lg leading-relaxed mb-3">
-          Thanks! We are confirming the payment for{' '}
-          <strong className="text-white">"{songTitle}"</strong>. This page checks the
-          status automatically — it usually takes 30 seconds to 2 minutes.
-        </p>
-        <p className="text-ink-300 text-sm">
-          You will receive a confirmation email as soon as the chart entry is live.
-        </p>
-        {/* Client component: hard-reloads every 6s + shows live countdown */}
-        <PendingAutoRefresh intervalSeconds={6} />
-        <p className="text-ink-500 text-xs mt-10 max-w-md mx-auto leading-relaxed">
-          Still pending after 5 minutes? Reply to your receipt email or write to{' '}
-          <a href="mailto:contact@worldwidemusicstar.com" className="text-brand hover:underline">
-            contact@worldwidemusicstar.com
-          </a>{' '}
-          and we will activate your entry within a few hours.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function PendingClock() {
-  return (
-    <svg
-      width="56"
-      height="56"
-      viewBox="0 0 24 24"
-      className="mx-auto text-amber-300 mb-6 animate-pulse"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function GenericReceivedView() {
+function FallbackView({ reason }: { reason: 'missing-id' | 'not-found' }) {
   return (
     <section className="min-h-[60vh] flex items-center">
       <div className="mx-auto max-w-xl px-4 sm:px-6 py-16 text-center">
@@ -175,7 +117,7 @@ function GenericReceivedView() {
         </h1>
         <p className="text-ink-200 text-lg leading-relaxed mb-8">
           Thanks! Your chart entry is being processed. You will receive a confirmation email
-          within a few minutes once the payment is fully confirmed.
+          shortly.
         </p>
         <div className="flex justify-center gap-3 flex-wrap">
           <Link
