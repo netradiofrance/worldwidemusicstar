@@ -1,20 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/refresh-counters",
-      "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/cron/generate-articles",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/monthly-archive",
-      "schedule": "5 0 1 * *"
-    },
-    {
-      "path": "/api/cron/payment-reminders",
-      "schedule": "10 9 * * *"
+      "path": "/api/cron/master",
+      "schedule": "0 6 * * *"
     }
   ]
 }
