@@ -1,29 +1,41 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 /**
- * Mounts a periodic `router.refresh()` so the surrounding server component
- * can re-fetch and re-render. Used on /add-a-song/success while a track
- * is still in pending_payment state — once the webhook lands and the
- * server detects status === 'active', it returns the celebratory view
- * instead and this component is no longer rendered, ending the loop.
+ * Periodically reloads the page until the server-rendered output
+ * indicates that the track has been activated. Uses
+ * window.location.reload() because Next.js App Router's
+ * router.refresh() does not always force a visible re-render in
+ * production (the cached client tree can stay identical even when
+ * the server data has changed).
  *
- * router.refresh() (Next.js App Router) re-runs the server component
- * tree without a full page reload, so React state and scroll position
- * are preserved.
+ * A small "Checking again in N seconds…" countdown shows that the
+ * page is alive and gives the user predictability.
  */
-export function PendingAutoRefresh({ intervalMs = 6000 }: { intervalMs?: number }) {
-  const router = useRouter();
+export function PendingAutoRefresh({ intervalSeconds = 6 }: { intervalSeconds?: number }) {
+  const [secondsLeft, setSecondsLeft] = useState(intervalSeconds);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      router.refresh();
-    }, intervalMs);
-    return () => clearInterval(id);
-  }, [router, intervalMs]);
+    // Per-second tick for the countdown display
+    const tick = setInterval(() => {
+      setSecondsLeft(s => (s > 1 ? s - 1 : intervalSeconds));
+    }, 1000);
 
-  // Render nothing — pure side-effect component
-  return null;
+    // Hard reload on the configured interval
+    const reloadTimer = setInterval(() => {
+      window.location.reload();
+    }, intervalSeconds * 1000);
+
+    return () => {
+      clearInterval(tick);
+      clearInterval(reloadTimer);
+    };
+  }, [intervalSeconds]);
+
+  return (
+    <p className="text-ink-400 text-xs mt-4 tabular-nums">
+      Checking again in {secondsLeft}s…
+    </p>
+  );
 }
