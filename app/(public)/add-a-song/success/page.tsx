@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { createServerClient } from '@/lib/supabase';
 import { GENRE_BY_SLUG } from '@/lib/genres';
+import { PendingAutoRefresh } from '@/components/PendingAutoRefresh';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,13 +21,13 @@ interface PageProps {
  *      celebratory "you're charted" view with a direct link to the
  *      artist's track page.
  *   2. Webhook hasn't arrived yet (still 'pending_payment'): show a
- *      "we're confirming your payment, this takes 1-2 minutes" view
- *      with a meta-refresh tag so the page reloads after 8 seconds.
+ *      "we're confirming your payment" view, and a small client-side
+ *      component re-fetches the page every 6 seconds via router.refresh
+ *      until the server detects activation.
  *
  * If the webhook never arrives (a known risk with Vivid — their dashboard
- * does not expose webhook delivery history), the artist can simply email
- * us; the admin will then mark the track as paid via the new admin
- * action button.
+ * does not expose webhook delivery history), the artist can email us;
+ * the admin will then activate the track via the Mark-as-paid button.
  */
 export default async function AddSongSuccessPage({ searchParams }: PageProps) {
   const { track: trackId } = await searchParams;
@@ -60,11 +61,13 @@ export default async function AddSongSuccessPage({ searchParams }: PageProps) {
     );
   }
 
-  // status === 'pending_payment' (or anything else) — show the waiting view
-  return <PendingView trackId={track.id} songTitle={track.song_title} />;
+  // status === 'pending_payment' — show the waiting view with auto-refresh
+  return <PendingView songTitle={track.song_title} />;
 }
 
-// ----------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Active view — celebratory "you're charted"
+// ---------------------------------------------------------------------------
 
 function ActivatedView({
   artistName,
@@ -111,35 +114,30 @@ function ActivatedView({
   );
 }
 
-function PendingView({ trackId, songTitle }: { trackId: string; songTitle: string }) {
+// ---------------------------------------------------------------------------
+// Pending view — auto-refresh until webhook lands
+// ---------------------------------------------------------------------------
+
+function PendingView({ songTitle }: { songTitle: string }) {
   return (
     <section className="min-h-[60vh] flex items-center">
-      {/* Auto-reload every 8s — when the webhook lands, the next refresh
-          will pick up status=active and switch to the celebratory view. */}
-      <meta httpEquiv="refresh" content="8" />
+      {/* Client-side auto-refresh: re-runs the server component every 6s */}
+      <PendingAutoRefresh intervalMs={6000} />
       <div className="mx-auto max-w-xl px-4 sm:px-6 py-16 text-center">
-        <Clock className="mx-auto text-amber-300 mb-6 animate-pulse" size={56} />
+        <PendingClock />
         <h1 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest mb-4">
           Payment received.
         </h1>
         <p className="text-ink-200 text-lg leading-relaxed mb-3">
           Thanks! We are confirming the payment for{' '}
-          <strong className="text-white">"{songTitle}"</strong>. This page will refresh
-          automatically — it usually takes 30 seconds to 2 minutes.
+          <strong className="text-white">"{songTitle}"</strong>. This page checks the
+          status automatically every few seconds — it usually takes 30 seconds to 2 minutes.
         </p>
         <p className="text-ink-300 text-sm mb-8">
           You will receive a confirmation email as soon as the chart entry is live.
         </p>
-        <div className="flex justify-center gap-3 flex-wrap">
-          <Link
-            href={`/recover/${trackId}`}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 hover:border-white/40 text-white font-semibold px-6 py-3 text-sm"
-          >
-            Refresh now
-          </Link>
-        </div>
         <p className="text-ink-500 text-xs mt-8 max-w-md mx-auto leading-relaxed">
-          Still pending after 5 minutes? Reply to the receipt email or write to{' '}
+          Still pending after 5 minutes? Reply to your receipt email or write to{' '}
           <a href="mailto:contact@worldwidemusicstar.com" className="text-brand hover:underline">
             contact@worldwidemusicstar.com
           </a>{' '}
@@ -149,6 +147,30 @@ function PendingView({ trackId, songTitle }: { trackId: string; songTitle: strin
     </section>
   );
 }
+
+// Pure server-side SVG — keeps a gentle pulse without needing a client bundle
+function PendingClock() {
+  return (
+    <svg
+      width="56"
+      height="56"
+      viewBox="0 0 24 24"
+      className="mx-auto text-amber-300 mb-6 animate-pulse"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Generic fallback when no track id is present
+// ---------------------------------------------------------------------------
 
 function GenericReceivedView() {
   return (
