@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
 import { verifyVividSignature, VividWebhookPayload } from '@/lib/vivid';
-import { sendEmail, chartConfirmationEmail, paymentReceiptEmail } from '@/lib/email';
-import { GENRE_BY_SLUG } from '@/lib/genres';
+import { activateTrack } from '@/lib/track-status';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,10 +12,12 @@ export const dynamic = 'force-dynamic';
  * header. The signature is computed over the RAW body (not a re-encoded
  * version) so we read the raw text first, then JSON.parse it ourselves.
  *
- * On STATUS_SUCCESS we:
- *   1. Activate the track (pending_payment -> active)
- *   2. Mark the payment row as completed
- *   3. Send the confirmation + receipt emails via Mailjet
+ * On STATUS_SUCCESS we delegate to activateTrack(), which is shared with
+ * the admin "Mark as paid" path so the two flows produce identical state.
+ *
+ * Logging is intentionally verbose — when a payment goes through but a
+ * track is not activated, the logs are our only forensic tool, since
+ * Vivid's dashboard does not expose webhook delivery history (we checked).
  *
  * The endpoint always responds 200 once the signature is valid, even if
  * the payload concerns an unknown order or an irrelevant status — this
@@ -28,12 +28,23 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get('x-signature') ?? '';
 
+  console.log('[vivid/webhook] inbound request', {
+    bodyLength: rawBody.length,
+    hasSignature: !!signature,
+    signaturePrefix: signature.slice(0, 12),
+    contentType: req.headers.get('content-type'),
+    userAgent: req.headers.get('user-agent'),
+  });
+
   if (!signature) {
-    console.warn('[vivid/webhook] missing X-Signature');
+    console.warn('[vivid/webhook] REJECTED — missing X-Signature header');
     return NextResponse.json({ error: 'Signature is undefined' }, { status: 401 });
   }
   if (!verifyVividSignature(rawBody, signature)) {
-    console.warn('[vivid/webhook] invalid signature');
+    console.warn('[vivid/webhook] REJECTED — invalid signature', {
+      receivedSignaturePrefix: signature.slice(0, 12),
+      bodyPreview: rawBody.slice(0, 200),
+    });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
@@ -41,86 +52,42 @@ export async function POST(req: Request) {
   let payload: VividWebhookPayload;
   try {
     payload = JSON.parse(rawBody);
-  } catch {
+  } catch (e) {
+    console.error('[vivid/webhook] JSON parse failed', e);
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  console.log('[vivid/webhook] received', { status: payload.status, externalOrderId: payload.externalOrderId });
+  console.log('[vivid/webhook] payload parsed', {
+    status: payload.status,
+    externalOrderId: payload.externalOrderId,
+    paymentId: payload.paymentId,
+  });
 
   // 3. Only act on a successful payment with a track reference
   if (payload.status !== 'STATUS_SUCCESS' || !payload.externalOrderId) {
+    console.log('[vivid/webhook] IGNORED — non-success status or missing externalOrderId');
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  const trackId = payload.externalOrderId;
-  const sb = createServerClient();
+  // 4. Activate the track via the shared helper
+  const result = await activateTrack({
+    trackId: payload.externalOrderId,
+    paymentProviderId: payload.paymentId,
+    rawProviderPayload: payload,
+    source: 'webhook',
+  });
 
-  // 4. Look up the track
-  const { data: track, error: trackErr } = await sb
-    .from('tracks')
-    .select('id, artist_name, song_title, genre, email, status')
-    .eq('id', trackId)
-    .maybeSingle();
-
-  if (trackErr || !track) {
-    console.error('[vivid/webhook] track not found:', trackId, trackErr);
-    // Acknowledge anyway so Vivid does not retry
-    return NextResponse.json({ ok: true, ignored: true, reason: 'track-not-found' });
+  if (!result.ok) {
+    console.error('[vivid/webhook] activation FAILED:', result.error, 'for trackId:', payload.externalOrderId);
+    // Acknowledge anyway so Vivid does not retry forever — the admin
+    // can intervene manually via the "Mark as paid" button.
+    return NextResponse.json({ ok: true, activationError: result.error });
   }
 
-  // Idempotency — if already active, do not duplicate emails
-  if (track.status === 'active') {
-    return NextResponse.json({ ok: true, alreadyActive: true });
-  }
+  console.log('[vivid/webhook] activation SUCCESS', {
+    trackId: payload.externalOrderId,
+    alreadyActive: result.alreadyActive,
+  });
 
-  // 5. Activate the track
-  const { error: updateErr } = await sb
-    .from('tracks')
-    .update({
-      status: 'active',
-      activated_at: new Date().toISOString(),
-    })
-    .eq('id', trackId);
-
-  if (updateErr) {
-    console.error('[vivid/webhook] track activation failed:', updateErr);
-    return NextResponse.json({ error: 'activation failed' }, { status: 500 });
-  }
-
-  // 6. Update the matching payment row to completed
-  await sb
-    .from('payments')
-    .update({
-      status: 'completed',
-      provider_capture_id: payload.paymentId ?? null,
-      raw_payload: payload as any,
-    })
-    .eq('track_id', trackId)
-    .eq('status', 'pending');
-
-  // 7. Send confirmation emails (best effort — do not fail the webhook if email is down)
-  try {
-    const genreName = GENRE_BY_SLUG[track.genre]?.name ?? track.genre;
-    const trackUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://worldwidemusicstar.com'}/track/${track.id}`;
-    const confirmation = chartConfirmationEmail({
-      artistName: track.artist_name,
-      songTitle: track.song_title,
-      genreName,
-      trackUrl,
-    });
-    await sendEmail({ to: track.email, ...confirmation });
-
-    const price = Number(process.env.NEXT_PUBLIC_ENTRY_PRICE_EUR ?? '99.99');
-    const receipt = paymentReceiptEmail({
-      artistName: track.artist_name,
-      songTitle: track.song_title,
-      amount: price,
-      orderId: payload.paymentId ?? track.id,
-    });
-    await sendEmail({ to: track.email, ...receipt });
-  } catch (e) {
-    console.error('[vivid/webhook] email send failed (non-fatal):', e);
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, alreadyActive: result.alreadyActive });
 }
