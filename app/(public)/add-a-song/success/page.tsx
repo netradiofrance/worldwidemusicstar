@@ -20,10 +20,11 @@ interface PageProps {
  *   1. Webhook already arrived (track.status === 'active'): show the
  *      celebratory "you're charted" view with a direct link to the
  *      artist's track page.
- *   2. Webhook hasn't arrived yet (still 'pending_payment'): show a
- *      "we're confirming your payment" view, and a small client-side
- *      component re-fetches the page every 6 seconds via router.refresh
- *      until the server detects activation.
+ *   2. Webhook hasn't arrived yet (still 'pending_payment'): show the
+ *      waiting view. A small client-side helper hard-reloads the page
+ *      every 6 seconds (window.location.reload — router.refresh() was
+ *      unreliable in production), so the next render will pick up
+ *      status === 'active' as soon as the webhook lands.
  *
  * If the webhook never arrives (a known risk with Vivid — their dashboard
  * does not expose webhook delivery history), the artist can email us;
@@ -32,8 +33,7 @@ interface PageProps {
 export default async function AddSongSuccessPage({ searchParams }: PageProps) {
   const { track: trackId } = await searchParams;
 
-  // No id in URL = generic celebration page (the artist may have closed
-  // and reopened the tab); we cannot say much without context.
+  // No id in URL = generic celebration page
   if (!trackId) {
     return <GenericReceivedView />;
   }
@@ -61,12 +61,10 @@ export default async function AddSongSuccessPage({ searchParams }: PageProps) {
     );
   }
 
-  // status === 'pending_payment' — show the waiting view with auto-refresh
+  // Pending — show the waiting view with auto-refresh
   return <PendingView songTitle={track.song_title} />;
 }
 
-// ---------------------------------------------------------------------------
-// Active view — celebratory "you're charted"
 // ---------------------------------------------------------------------------
 
 function ActivatedView({
@@ -115,14 +113,10 @@ function ActivatedView({
 }
 
 // ---------------------------------------------------------------------------
-// Pending view — auto-refresh until webhook lands
-// ---------------------------------------------------------------------------
 
 function PendingView({ songTitle }: { songTitle: string }) {
   return (
     <section className="min-h-[60vh] flex items-center">
-      {/* Client-side auto-refresh: re-runs the server component every 6s */}
-      <PendingAutoRefresh intervalMs={6000} />
       <div className="mx-auto max-w-xl px-4 sm:px-6 py-16 text-center">
         <PendingClock />
         <h1 className="font-display uppercase text-4xl sm:text-5xl tracking-tightest mb-4">
@@ -131,12 +125,14 @@ function PendingView({ songTitle }: { songTitle: string }) {
         <p className="text-ink-200 text-lg leading-relaxed mb-3">
           Thanks! We are confirming the payment for{' '}
           <strong className="text-white">"{songTitle}"</strong>. This page checks the
-          status automatically every few seconds — it usually takes 30 seconds to 2 minutes.
+          status automatically — it usually takes 30 seconds to 2 minutes.
         </p>
-        <p className="text-ink-300 text-sm mb-8">
+        <p className="text-ink-300 text-sm">
           You will receive a confirmation email as soon as the chart entry is live.
         </p>
-        <p className="text-ink-500 text-xs mt-8 max-w-md mx-auto leading-relaxed">
+        {/* Client component: hard-reloads every 6s + shows live countdown */}
+        <PendingAutoRefresh intervalSeconds={6} />
+        <p className="text-ink-500 text-xs mt-10 max-w-md mx-auto leading-relaxed">
           Still pending after 5 minutes? Reply to your receipt email or write to{' '}
           <a href="mailto:contact@worldwidemusicstar.com" className="text-brand hover:underline">
             contact@worldwidemusicstar.com
@@ -148,7 +144,6 @@ function PendingView({ songTitle }: { songTitle: string }) {
   );
 }
 
-// Pure server-side SVG — keeps a gentle pulse without needing a client bundle
 function PendingClock() {
   return (
     <svg
@@ -168,8 +163,6 @@ function PendingClock() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Generic fallback when no track id is present
 // ---------------------------------------------------------------------------
 
 function GenericReceivedView() {
