@@ -8,15 +8,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin "Send recovery email" — fires a payment reminder for one specific
- * pending track on demand, bypassing the daily cron schedule.
+ * Admin "Send recovery email" — fires a payment reminder for one
+ * specific pending track on demand, bypassing the daily cron schedule.
  *
  * Respects unsubscribe — if the user has opted out (unsubscribed_at set
  * on any of their tracks), this returns a 403 with a clear message.
  *
- * The cron's pacing logic (count, sent_at) still gets updated so that the
- * automatic schedule continues correctly afterwards: this manual send
- * counts as one of the up-to-8 reminders the artist will receive.
+ * The cron's pacing logic (count, sent_at) still gets updated so that
+ * the automatic schedule continues correctly afterwards: this manual
+ * send counts as one of the up-to-8 reminders the artist will receive.
+ *
+ * The reminder email carries a 1x1 tracking pixel (template helper is
+ * async to sign the JWT), so this handler awaits it.
  */
 export async function POST(req: Request) {
   const session = await getAdminFromCookie();
@@ -46,7 +49,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Respect unsubscribe — also check across all tracks for this email
   if (track.unsubscribed_at) {
     return NextResponse.json(
       { error: 'This artist has unsubscribed and cannot be emailed.' },
@@ -72,7 +74,8 @@ export async function POST(req: Request) {
   const attemptNumber = (track.payment_reminder_count ?? 0) + 1;
 
   try {
-    const tpl = paymentReminderEmail({
+    const tpl = await paymentReminderEmail({
+      trackId: track.id,
       artistName: track.artist_name,
       songTitle: track.song_title,
       genreName,
