@@ -11,20 +11,14 @@ export const maxDuration = 60;
 /**
  * Payment reminder cron.
  *
- * Sends reminders to artists who started a registration but never completed
- * payment. Schedule: 30 min after creation, then once a day for the next
- * 7 days. After 8 reminders the track is auto-archived.
+ * Sends reminders to artists who started a registration but never
+ * completed payment. Schedule: 30 min after creation, then once a day
+ * for the next 7 days. After 8 reminders the track is auto-archived.
  *
- * Skips tracks where `unsubscribed_at` is set (List-Unsubscribe respected).
+ * Skips tracks where unsubscribed_at is set (List-Unsubscribe respected).
  *
- * To pace correctly, we record each send in `tracks.payment_reminder_sent_at`
- * and `tracks.payment_reminder_count`. The cron picks every track whose
- * "next reminder due time" is in the past.
- *
- * On Vercel Hobby this cron is wired to run once per day. That gives the
- * artist 7 daily nudges after the initial 30-min one. If finer cadence is
- * needed, an external cron service (cron-job.org, EasyCron) can hit this
- * endpoint every 30 minutes — the cron-secret auth still works.
+ * Each reminder email carries a 1x1 tracking pixel so we can estimate
+ * open rates over time (computed in the helper, requires await).
  */
 export async function POST(req: Request) {
   if (!(await authorizeCron(req))) return new NextResponse('unauthorized', { status: 401 });
@@ -35,15 +29,14 @@ export async function GET(req: Request) {
   return run();
 }
 
-const FIRST_REMINDER_AFTER_MS = 30 * 60 * 1000;          // 30 min after creation
-const DAILY_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;  // every 24h after that
-const MAX_REMINDERS = 8;                                  // 1 quick + 7 daily
+const FIRST_REMINDER_AFTER_MS = 30 * 60 * 1000;
+const DAILY_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MAX_REMINDERS = 8;
 
 async function run() {
   const sb = createServerClient();
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://worldwidemusicstar.com').replace(/\/$/, '');
 
-  // 1. Pick all pending tracks (also ignore unsubscribed)
   const { data: tracks, error } = await sb
     .from('tracks')
     .select('id, artist_name, song_title, genre, email, status, created_at, payment_reminder_sent_at, payment_reminder_count, unsubscribed_at')
@@ -55,8 +48,7 @@ async function run() {
   let sent = 0, archived = 0, skipped = 0, unsubscribedSkipped = 0;
   const now = Date.now();
 
-  // Build a Set of unsubscribed emails so we also skip if ANY of the
-  // user's other tracks unsubscribed (cross-track opt-out)
+  // Build a Set of unsubscribed emails for cross-track opt-out
   const { data: optOuts } = await sb
     .from('tracks')
     .select('email')
@@ -64,7 +56,6 @@ async function run() {
   const unsubscribedEmails = new Set((optOuts ?? []).map(r => r.email.toLowerCase()));
 
   for (const t of tracks ?? []) {
-    // Defensive double-check
     if (unsubscribedEmails.has(t.email.toLowerCase())) {
       unsubscribedSkipped++;
       continue;
@@ -74,7 +65,6 @@ async function run() {
     const lastSent = t.payment_reminder_sent_at ? new Date(t.payment_reminder_sent_at).getTime() : null;
     const count = t.payment_reminder_count ?? 0;
 
-    // Reached max reminders -> archive the abandoned track
     if (count >= MAX_REMINDERS) {
       await sb.from('tracks').update({
         status: 'archived',
@@ -84,7 +74,6 @@ async function run() {
       continue;
     }
 
-    // Decide whether this track is due for a reminder
     let due = false;
     if (count === 0) {
       due = (now - created) >= FIRST_REMINDER_AFTER_MS;
@@ -97,7 +86,8 @@ async function run() {
     try {
       const genreName = GENRE_BY_SLUG[t.genre]?.name ?? t.genre;
       const recoverUrl = `${site}/recover/${t.id}`;
-      const tpl = paymentReminderEmail({
+      const tpl = await paymentReminderEmail({
+        trackId: t.id,
         artistName: t.artist_name,
         songTitle: t.song_title,
         genreName,
