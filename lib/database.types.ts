@@ -1,6 +1,7 @@
-// Database types — kept in sync with supabase/migrations/001_init.sql.
-// You can also auto-generate this file with `supabase gen types typescript`
-// once the project is linked, but this hand-rolled version is fine to start.
+// Database types — kept in sync with supabase/migrations/001_init.sql
+// and subsequent migrations. You can also auto-generate this file with
+// `supabase gen types typescript` once the project is linked, but this
+// hand-rolled version is fine to start.
 
 export type GenreSlug =
   | 'hiphop-rap'
@@ -22,7 +23,7 @@ export type GenreSlug =
 
 export type EntryStatus = 'pending_payment' | 'active' | 'rejected' | 'archived';
 export type ArticleStatus = 'draft' | 'scheduled' | 'published' | 'archived';
-export type PaymentProvider = 'paypal' | 'stripe' | 'manual';
+export type PaymentProvider = 'paypal' | 'stripe' | 'vivid' | 'manual';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 
 export interface Track {
@@ -49,6 +50,11 @@ export interface Track {
   updated_at: string;
   activated_at: string | null;
   archived_at: string | null;
+  paid_at: string | null;
+  unsubscribed_at: string | null;
+  payment_reminder_sent_at: string | null;
+  payment_reminder_count: number | null;
+  is_admin_added: boolean | null;
 }
 
 export interface Article {
@@ -98,32 +104,49 @@ export interface Subscriber {
   created_at: string;
 }
 
-export interface ChartArchive {
-  id: string;
-  period: string;
-  scope: string;
-  genre: GenreSlug | null;
+/**
+ * Per-rank snapshot row used by the monthly archives page.
+ *
+ * Each entry represents one position in a frozen ranking — kept as a
+ * compact row rather than re-querying the original track at archive
+ * read time. That way archived rankings stay immutable even if the
+ * track row is later edited or deleted.
+ */
+export interface ArchivedRanking {
   rank: number;
   track_id: string;
-  artist_name: string;
-  song_title: string;
-  cover_url: string | null;
-  votes_count: number;
-  spotify_followers: number;
-  youtube_subscribers: number;
+  artist: string;
+  song: string;
   score: number;
-  archived_at: string;
+  votes: number;
+  spotify: number;
+  youtube: number;
+  cover_url: string | null;
+}
+
+/**
+ * Frozen monthly chart snapshot. The full ranking is stored as a JSON
+ * array on a single row keyed by (period_year, period_month, genre).
+ * `genre = null` represents the overall (all-charts) snapshot.
+ */
+export interface ChartArchive {
+  id: string;
+  period_year: number;
+  period_month: number;
+  genre: GenreSlug | null;
+  ranking: ArchivedRanking[];
+  created_at: string;
 }
 
 export interface Award {
   id: string;
-  period: string;
+  period_year: number;
+  period_month: number;
   track_id: string;
-  artist_name: string;
-  song_title: string;
-  scope: string;
-  notes: string | null;
-  awarded_at: string;
+  votes_count: number;
+  score: number;
+  trophy_image_url: string | null;
+  created_at: string;
 }
 
 export interface AdminUser {
