@@ -30,7 +30,24 @@ interface PageProps {
  * we'll activate it shortly" message rather than pretend everything is
  * fine — the admin will see the still-pending track in the dashboard
  * and can mark it paid manually within a few hours.
+ *
+ * Implementation note — we explicitly type the Supabase return value as
+ * `TrackRow | null`. Without this, TypeScript can infer `track` as
+ * `never` when its internal type resolution fails to bridge between the
+ * PostgreSQL enum (status) and our string-literal comparisons
+ * (`=== 'active'`), leading to a `Property 'status' does not exist on
+ * type 'never'` build error. The explicit cast keeps the build
+ * deterministic on fresh (no-cache) Vercel builds.
  */
+
+type TrackRow = {
+  id: string;
+  artist_name: string;
+  song_title: string;
+  genre: string;
+  status: string;
+};
+
 export default async function AddSongSuccessPage({ searchParams }: PageProps) {
   const { track: trackId } = await searchParams;
 
@@ -39,11 +56,12 @@ export default async function AddSongSuccessPage({ searchParams }: PageProps) {
   }
 
   const sb = createServerClient();
-  const { data: track } = await sb
+  const { data } = await sb
     .from('tracks')
     .select('id, artist_name, song_title, genre, status')
     .eq('id', trackId)
     .maybeSingle();
+  const track = data as TrackRow | null;
 
   if (!track) {
     return <ProcessingView />;
@@ -71,7 +89,7 @@ export default async function AddSongSuccessPage({ searchParams }: PageProps) {
     return <ProcessingView songTitle={track.song_title} />;
   }
 
-  const genreName = GENRE_BY_SLUG[track.genre]?.name ?? track.genre;
+  const genreName = GENRE_BY_SLUG[track.genre as keyof typeof GENRE_BY_SLUG]?.name ?? track.genre;
   const genreChartUrl = `/charts/${track.genre}`;
 
   return (
