@@ -1,13 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Don't fail the production build on TypeScript or ESLint errors. The
-  // app still type-checks correctly in development; this just prevents
-  // strict typing edge-cases (like Supabase result narrowing) from
-  // blocking deploys. Re-enable when polishing.
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
-
   images: {
+    // Image optimization disabled — images are served directly from
+    // their origin CDN without passing through Vercel's transformer.
+    //
+    // Why: Vercel's Hobby plan caps Image Optimization at 5000
+    // transforms/month. Multi-format (webp/avif) and multi-size
+    // (mobile/desktop/retina) variants multiply the count fast, and
+    // we were hitting the ceiling each month — producing broken
+    // images for visitors mid-cycle. The origin CDNs we rely on
+    // (Spotify, YouTube, OpenAI blob, Supabase Storage) are already
+    // globally distributed and fast, so the perceptible loss is
+    // minimal while the operational gain (no quota cliff) is real.
+    //
+    // The remotePatterns are kept so that <Image> components still
+    // know which hostnames are allowed. They no longer trigger
+    // transformation when `unoptimized: true` is set.
+    unoptimized: true,
     remotePatterns: [
       { protocol: 'https', hostname: 'i.scdn.co' },           // Spotify album art
       { protocol: 'https', hostname: 'mosaic.scdn.co' },
