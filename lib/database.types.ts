@@ -57,15 +57,23 @@ export interface Track {
   is_admin_added: boolean | null;
 }
 
+/**
+ * Article — matches the real SQL schema from migrations/001_init.sql.
+ * Note: the markdown body column is named `content_md` in the database,
+ * NOT `body_md`. Keep this in sync with the SQL — renaming the field
+ * here without an accompanying SQL migration silently breaks every
+ * code path that reads articles.
+ */
 export interface Article {
   id: string;
   slug: string;
   title: string;
-  excerpt: string;
-  body_md: string;
+  excerpt: string | null;
+  content_md: string;
   cover_url: string | null;
-  related_genre: GenreSlug | null;
+  cover_prompt: string | null;
   related_track_id: string | null;
+  related_genre: GenreSlug | null;
   status: ArticleStatus;
   generated_by: string | null;
   published_at: string | null;
