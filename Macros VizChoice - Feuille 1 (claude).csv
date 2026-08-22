@@ -1,0 +1,211 @@
+VizChoice Query Parameter,Description,Macro
+distribution_platform_code,Distribution Platform Code,{{distribution_platform_code}}
+insertion_platform_code,"Insertion Platform Code
+",{{insertion_platform_code}}
+app_storeurl,"Application Store url.
+Note: When the AdCall is from an App.",{{app_storeurl}}
+app_storeid,"Application Store identifier.
+Note: When the AdCall is from an App.",{{app_storeid}}
+app_name,"Application Name.
+Note: When the AdCall is from an App.",{{app_name}}
+app_domain,"Application Domain.
+Note: When the AdCall is from an App.",{{app_domain}}
+site_name,"Site Name.
+Note: When the AdCall is from a Site.",{{site_name}}
+site_domain,"Site Domain.
+Note: When the AdCall is from a Site.",{{site_domain}}
+context,"Delivery context (linear, vod, startover, npvr, timeshift).",{{context}}
+response_type,"Indicates if the ad Response expected is for a full Break, a partial Break, a single Ad or multiple Breaks.
+break: Full Break
+ad: Single Ad
+partial: Partial Break
+multiple: Multiple Break
+
+Note: Full Break: default for Linear. Multiple Breaks: default for VOD.",{{response_type}}
+output,"Indicates the expected response format.
+vast: VAST Default version: VAST 3
+vast4.2: VAST version 4.2
+vmap: VMAP
+Note: Other formats available through template",{{output}}
+break_type,"Break type: preroll, midroll, postroll
+Note: For response type ad, break, partial",{{break_type}}
+channel_code,Channel Code,{{channel_code}}
+network_name,Network Name,{{network_name}}
+language,"Channel or Content Language
+ISO 639-1 (two-letter) or ISO 639-2 (three-letter)",{{language}}
+w,Width of the video player in pixels,{{w}}
+h,Height of the video player in pixels,{{h}}
+inapp_browser,"Indicates if the call provides from an application or a bowser:
+inapp: call from an application
+browser: call from a browser",{{inapp_browser}}
+os_code,"os: 
+0 other
+2 android
+3 appletv
+8 chromeos
+10 fireos
+11 firefoxos
+13 ios
+14 linux
+15 macos
+25 tizen
+27 webos
+28 windows
+1001 androidtv
+1002 vidaaos
+1003 titanos",{{os_code}}
+os_name,"os: 
+0 other
+2 android
+3 appletv
+8 chromeos
+10 fireos
+11 firefoxos
+13 ios
+14 linux
+15 macos
+25 tizen
+27 webos
+28 windows
+1001 androidtv
+1002 vidaaos
+1003 titanos",{{os_name}}
+device_type_code,"Device type:
+0 other
+2 desktop
+3 ctv
+4 phone
+5 tablet
+6 connecteddevice
+7 box
+1001 smartappliance",{{device_type_code}}
+device_type_name,"Device type:
+0 other
+2 desktop
+3 ctv
+4 phone
+5 tablet
+6 connecteddevice
+7 box
+1001 smartappliance",{{device_type_name}}
+device_brand_name,"Device name:
+Apple TV, Samsung, LG, Sony, Vizio, TCL, Hisense, Panasonic, Philips, Sharp, Xiaomi, Roku
+Amazon Fire TV, Google Chromecast
+NVIDIA Shield, Xiaomi Mi Box
+PlayStation, Xbox, Nintendo Switch
+Comcast Xfinity, Sky Q, Dish Network, DirecTV, Spectrum, Vodafone TV, Verizon Fios
+...",{{device_brand_name}}
+device_make,Device Make,{{device_make}}
+device_model,Device Model,{{device_model}}
+"break_duration
+or
+break_duration_s","Break duration in ms
+or
+Break duration in seconds
+Note: For Linear only.","{{break_duration
+or
+break_duration_s}}"
+cb,"Cache Buster.
+A random positive numerical value, between 1000000000 and 9999999999.",{{cb}}
+stream_id,Stream Id.,{{stream_id}}
+stream_uuid,Stream uuid.,{{stream_uuid}}
+session_id,Session Id.,{{session_id}}
+session_uuid,Session uuid.,{{session_uuid}}
+ifa,Advertising device identifier.,{{ifa}}
+ifa_type,"Advertising device identifier type:
+Generic Id: dpid
+Android Id: aaid
+Apple Id: idfa
+Amazon Fire Id: afai
+Microsoft Id: msai
+Roku Id: rida
+Tizen Id: tifa
+Vizio Id: vida
+Publisher Provided Id: ppid
+Session Id: sessionid",{{ifa_type}}
+ppid,Publisher Provided User Id,{{ppid}}
+us_privacy,User Consent String in US Privacy Format.,{{us_privacy}}
+coppa,"Indicates if the content is directed at children:
+1: Directed at children
+0: Not directed at children
+
+Note: For the US, children under the age of 13 years.",{{coppa}}
+gdpr,"Indicates if the GDPR rules apply:
+apply: 1
+
+do not apply: 0",{{gdpr}}
+gdpr_consent,User Consent String in TCF V2 Format.,{{gdpr_consent}}
+addtl_consent,"Additional Consent String in TCF V2 format.
+Format: 1~...",{{addtl_consent}}
+lmt,"Limit Ad Tracking:
+0: User has not requested ""Limit Ad Tracking""
+1: User has requested ""Limit Ad Tracking""
+
+Note: If lmt is not present, the assumption is that the user has not requested ""Limit Ad Tracking"".",{{lmt}}
+dnt,"Do not Track:
+0: User has not requested ""Do not Track""
+1: User has requested ""Do not Track""
+
+Note: If dnt is not present, the assumption is that the user has not requested ""Do not Track"".",{{dnt}}
+country_code,"User Country code
+ISO 3166-1 alpha-2",{{country_code}}
+lat,User geographical latitude,{{lat}}
+lon,User geographical longitude,{{lon}}
+cid,"Content Id.
+As provided by the Channel Owner.",{{cid}}
+ua,"User Agent provided as a Query parameter.
+Note: If not provided in the http Header.",{{ua}}
+,,
+VizChoice Http Header,Description,Macro
+x-device-ip,,{{x-device-ip}}
+x-forwarded-for,,{{x-forwarded-for}}
+user-agent,,{{user-agent}}
+,"Note: For Http header macros interpretation, if the same value is provided as a Query parameter, the Query parameter has priority over Http header.",
+,,
+VizChoice Channel,,
+channel:code,,{{channel:code}}
+channel:name,,{{channel:name}}
+channel:escape_name,To use in order to ensure that spaces in channel name are escaped.,{{channel:escape_name}}
+channel:schedule_code,,{{channel:schedule_code}}
+channel:broadcastschedule_channel_code,,{{channel:broadcastschedule_channel_code}}
+channel:language,,{{channel:language}}
+channel:language_code,2 letters (ISO 639-1),{{channel:language_code}}
+channel:media_type,,{{channel:media_type}}
+channel:genre,,{{channel:genre}}
+channel:category_code,,{{channel:category_code}}
+channel:content_category_code,,{{channel:content_category_code}}
+channel:content_category_name,,{{channel:content_category_name}}
+channel:content_provider_code,,{{channel:content_provider_code}}
+channel:content_provider_name,,{{channel:content_provider_name}}
+,,
+VizChoice Content,,
+content_metadata:content_source_code,,{{content_metadata:content_source_code}}
+content_metadata:code,,{{content_metadata:code}}
+content_metadata:title,,{{content_metadata:title}}
+content_metadata:media_type,,{{content_metadata:media_type}}
+content_metadata:type,,{{content_metadata:type}}
+content_metadata:duration_s,,{{content_metadata:duration_s}}
+content_metadata:description,,{{content_metadata:description}}
+content_metadata:start_date,,{{content_metadata:start_date}}
+content_metadata:end_date,,{{content_metadata:end_date}}
+content_metadata:rating,,{{content_metadata:rating}}
+content_metadata:rating$registry=%registry%,Note: Example: content_metadata:rating$registry=IMDB,{{content_metadata:rating$registry=%registry%}}
+content_metadata:key_values_%key%,"Example: content_metadata:key_values_director.
+Note: If multiple values for a single key, all values are sent separated by a comma.",{{content_metadata:key_values_%key%}}
+content_metadata:category_%code%,Note: Beta,{{content_metadata:category_%code%}}
+content_metadata:thirdpartycontent_id_%registry%,Note: Beta,{{content_metadata:thirdpartycontent_id_%registry%}}
+,,
+VizChoice EPG,,
+broadcastschedule:code,,{{broadcastschedule:code}}
+broadcastschedule:title,,{{broadcastschedule:title}}
+broadcastschedule:duration,,{{broadcastschedule:duration}}
+broadcastschedule:language,,{{broadcastschedule:language}}
+broadcastschedule:channel_code,,{{broadcastschedule:channel_code}}
+broadcastschedule:channel_name,,{{broadcastschedule:channel_name}}
+broadcastschedule:description,,{{broadcastschedule:description}}
+broadcastschedule:start,,{{broadcastschedule:start}}
+broadcastschedule:end,,{{broadcastschedule:end}}
+broadcastschedule:rating,,{{broadcastschedule:rating}}
+broadcastschedule:rating$registry=%registry%,,{{broadcastschedule:rating$registry=%registry%}}
+broadcastschedule:category_%code%,Note: Beta,{{broadcastschedule:category_%code%}}
+broadcastschedule:thirdparty_ids_%registry%,Note: Beta,{{broadcastschedule:thirdparty_ids_%registry%}}
